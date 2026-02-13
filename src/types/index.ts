@@ -106,6 +106,24 @@ export interface AppState {
   viewMode: ViewMode;
   /** Selected star/object (if any) */
   selectedStar: Star | null;
+  /** Primary (left) menu navigation state - for search/finder */
+  menuState: MenuState;
+  /** Secondary (right) menu navigation state */
+  secondaryMenuState: MenuState;
+  /** Which menu is currently active */
+  activeMenu: ActiveMenu;
+  /** Current star filter */
+  starFilter: StarFilter;
+  /** Current constellation filter */
+  constellationFilter: ConstellationFilter;
+  /** Current planet filter */
+  planetFilter: PlanetFilter;
+  /** Current deep sky filter */
+  deepSkyFilter: DeepSkyFilter;
+  /** Search/finder state for the left menu */
+  searchState: import('./search').SearchState;
+  /** Currently targeted object for finder (null = no target) */
+  finderTarget: import('./search').SearchableObject | null;
 }
 
 /**
@@ -115,6 +133,99 @@ export enum ViewMode {
   Stars = 'Stars',
   Constellations = 'Constellations',
   Planets = 'Planets',
+  DeepSky = 'DeepSky',
+}
+
+/**
+ * Deep sky object filter options
+ */
+export enum DeepSkyFilter {
+  All = 'all',
+  Galaxies = 'galaxies',
+  Nebulae = 'nebulae',
+  Clusters = 'clusters',
+  Brightest = 'brightest',
+}
+
+/**
+ * Star filter options
+ */
+export enum StarFilter {
+  All = 'all',
+  Brightest = 'brightest',
+  Nearest = 'nearest',
+  ByConstellation = 'by_constellation',
+}
+
+/**
+ * Constellation filter options
+ */
+export enum ConstellationFilter {
+  All = 'all',
+  Zodiac = 'zodiac',
+  Seasonal = 'seasonal',
+  Northern = 'northern',
+  Southern = 'southern',
+}
+
+/**
+ * Planet filter options
+ */
+export enum PlanetFilter {
+  All = 'all',
+  Inner = 'inner',
+  Outer = 'outer',
+  Visible = 'visible',
+}
+
+/**
+ * Menu item structure for hierarchical navigation
+ */
+export interface MenuItem {
+  /** Display name */
+  name: string;
+  /** Optional action/value when selected */
+  value?: string;
+  /** Child items (for submenus) */
+  children?: MenuItem[];
+  /** Associated view mode */
+  viewMode?: ViewMode;
+  /** Optional description for the menu item */
+  description?: string;
+}
+
+/**
+ * Menu navigation state
+ */
+export interface MenuState {
+  /** Current menu items being displayed */
+  currentItems: MenuItem[];
+  /** Navigation history stack */
+  history: MenuItem[][];
+  /** Current depth level (0 = root) */
+  level: number;
+  /** Breadcrumb path labels for current depth */
+  path: string[];
+}
+
+/**
+ * Which menu is currently active/focused
+ */
+export enum ActiveMenu {
+  Left = 'left',
+  Right = 'right',
+}
+
+/**
+ * Secondary menu (right side) items for view type selection
+ */
+export interface SecondaryMenuItem {
+  /** Display name */
+  name: string;
+  /** Associated view mode */
+  viewMode: ViewMode;
+  /** Optional children for filters */
+  children?: MenuItem[];
 }
 
 /**

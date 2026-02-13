@@ -147,6 +147,11 @@ export function setOrientation(orientation: HeadOrientation): void {
  * Start keyboard-based simulation for desktop testing
  */
 function startKeyboardSimulation(): void {
+  console.log('Keyboard simulation started. Use arrow keys to simulate head movement:');
+  console.log('  ← → : Rotate left/right (azimuth)');
+  console.log('  ↑ ↓ : Look up/down (pitch)');
+  console.log('  R   : Reset orientation');
+  
   window.addEventListener('keydown', handleKeyDown);
   window.addEventListener('keyup', handleKeyUp);
   

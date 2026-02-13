@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Even Stars - Sky Chart (Debug)</title>
+  <title>Even Stars - Sky Chart</title>
   <style>
     * {
       margin: 0;
@@ -12,86 +12,136 @@
     }
     html, body {
       width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: #1a1a2e;
+      min-height: 100%;
+      background: linear-gradient(180deg, #091420 0%, #10263a 100%);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
     body {
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      padding: 20px;
+      padding: 16px;
     }
     .container {
-      max-width: 600px;
+      max-width: 680px;
       width: 100%;
+      margin: 0 auto;
     }
     h1 {
       color: #fff;
-      text-align: center;
-      margin-bottom: 10px;
-      font-size: 24px;
+      margin-bottom: 6px;
+      font-size: 26px;
     }
     .subtitle {
-      color: #888;
-      text-align: center;
-      margin-bottom: 30px;
+      color: #b7c7d9;
+      margin-bottom: 16px;
       font-size: 14px;
     }
-    .debug-panel {
-      background: #16213e;
+    .panel {
+      background: rgba(13, 31, 49, 0.92);
       border-radius: 12px;
-      padding: 24px;
-      border: 1px solid #0f3460;
+      padding: 16px;
+      border: 1px solid #1a3f5f;
+      margin-bottom: 12px;
     }
-    .debug-info {
-      color: #eaeaea;
-      line-height: 1.8;
+    .quick-help {
+      color: #d9e6f2;
       font-size: 14px;
+      line-height: 1.5;
     }
-    .debug-info .status {
-      font-weight: bold;
-      padding: 4px 8px;
-      border-radius: 4px;
+    .quick-help h2,
+    .settings h2,
+    .status-grid h2,
+    .glasses-preview h2 {
+      color: #dbe9f7;
+      font-size: 13px;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+    .steps {
+      margin-left: 18px;
+      color: #b7c7d9;
+      font-size: 13px;
+    }
+    .steps li {
+      margin-bottom: 6px;
+    }
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      color: #d9e6f2;
+      font-size: 13px;
+    }
+    .status-card {
+      padding: 10px;
+      border: 1px solid #284f70;
+      border-radius: 8px;
+      background: rgba(9, 20, 32, 0.8);
+    }
+    .status-label {
+      display: block;
+      color: #89a8c4;
+      font-size: 11px;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .status-value {
+      color: #e8f1fa;
+      font-weight: 600;
+      font-size: 13px;
+      word-break: break-word;
+    }
+    .value-pill {
       display: inline-block;
-      margin-bottom: 8px;
-    }
-    .debug-info .status.connected {
-      background: #2ecc71;
-      color: #000;
-    }
-    .debug-info .status.disconnected {
-      background: #e74c3c;
-      color: #fff;
-    }
-    .debug-info .location,
-    .debug-info .orientation,
-    .debug-info .mode {
-      color: #a0a0a0;
-      margin-bottom: 4px;
-    }
-    .debug-info .help {
-      margin-top: 20px;
-      padding-top: 20px;
-      border-top: 1px solid #0f3460;
-      color: #888;
+      padding: 3px 8px;
+      border-radius: 999px;
       font-size: 12px;
+      font-weight: 700;
     }
-    .debug-info .help p {
-      margin-bottom: 4px;
+    .value-pill.connected {
+      background: #2ecc71;
+      color: #06230f;
+    }
+    .value-pill.disconnected {
+      background: #e74c3c;
+      color: #fff5f5;
+    }
+    .settings-grid {
+      display: grid;
+      gap: 10px;
+    }
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: #d9e6f2;
+      font-size: 13px;
+      padding: 8px 0;
+      border-top: 1px solid #1b3851;
+    }
+    .setting-row:first-of-type {
+      border-top: 0;
+      padding-top: 0;
+    }
+    .setting-row select,
+    .setting-row button {
+      border: 1px solid #315f84;
+      border-radius: 6px;
+      background: #0f2438;
+      color: #f3f8fd;
+      padding: 8px 10px;
+      font-size: 13px;
+    }
+    .setting-row button {
+      cursor: pointer;
+    }
+    .setting-hint {
+      color: #90aeca;
+      font-size: 12px;
     }
     .glasses-preview {
-      margin-top: 24px;
-      text-align: center;
-    }
-    .glasses-preview h3 {
-      color: #888;
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      margin-bottom: 12px;
+      text-align: left;
     }
     .glasses-frame {
       display: inline-block;
@@ -102,7 +152,7 @@
     }
     #preview-canvas {
       width: 288px;
-      height: 110px;
+      height: 118px;
       background: #000;
       border: 1px solid #333;
       image-rendering: pixelated;
@@ -110,36 +160,152 @@
     @media (min-width: 768px) {
       #preview-canvas {
         width: 576px;
-        height: 220px;
+        height: 235px;
       }
     }
     .note {
-      color: #666;
+      color: #90aeca;
       font-size: 11px;
       margin-top: 8px;
     }
+    .menu-sim {
+      margin-top: 12px;
+      padding: 12px;
+      background: #0d1b2a;
+      border-radius: 8px;
+      border: 1px solid #1b3a5f;
+    }
+    .menu-sim h4 {
+      color: #888;
+      font-size: 11px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      letter-spacing: 0.5px;
+    }
+    .menu-sim-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .menu-btn {
+      padding: 6px 12px;
+      background: #1b3a5f;
+      color: #fff;
+      border: 1px solid #2e5c8a;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+    .menu-btn:hover {
+      background: #2e5c8a;
+    }
+    .menu-btn:active {
+      background: #3d7ab8;
+    }
+    .menu-back-btn {
+      background: #5c3a1b;
+      border-color: #8a5c2e;
+    }
+    .menu-back-btn:hover {
+      background: #8a5c2e;
+    }
+    @media (max-width: 600px) {
+      .status-grid {
+        grid-template-columns: 1fr;
+      }
+      .setting-row {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
   </style>
-  <script type="module" crossorigin src="/assets/main-D9XN5265.js"></script>
+  <script type="module" crossorigin src="/assets/main-DA8-yQ1U.js"></script>
 </head>
 <body>
   <div class="container">
-    <h1>🌟 Even Stars</h1>
+    <h1>Even Stars</h1>
     <p class="subtitle">Sky Chart for Even Realities Glasses</p>
-    
-    <div class="debug-panel">
-      <div id="debug-info" class="debug-info">
-        <div class="status disconnected">Initializing...</div>
+
+    <section class="panel quick-help">
+      <h2>How to Use</h2>
+      <ol class="steps">
+        <li>Wear the glasses and keep this app open on your phone.</li>
+        <li>Look around naturally: the sky map follows your head movement.</li>
+        <li>Use the glasses menus to pick a target or change what is displayed.</li>
+      </ol>
+    </section>
+
+    <section class="panel status-grid">
+      <h2>Current Status</h2>
+      <div class="status-card">
+        <span class="status-label">Glasses</span>
+        <span id="status-badge" class="value-pill disconnected">Disconnected</span>
       </div>
-      
-      <div class="glasses-preview">
-        <h3>Glasses Display (576 × 288)</h3>
-        <div class="glasses-frame">
-          <canvas id="preview-canvas" width="576" height="220"></canvas>
+      <div class="status-card">
+        <span class="status-label">View Mode</span>
+        <span id="mode-value" class="status-value">Stars</span>
+      </div>
+      <div class="status-card">
+        <span class="status-label">Location</span>
+        <span id="location-value" class="status-value">Unknown</span>
+      </div>
+      <div class="status-card">
+        <span class="status-label">Finder Target</span>
+        <span id="target-value" class="status-value">None selected</span>
+      </div>
+      <div class="status-card">
+        <span class="status-label">Orientation</span>
+        <span id="orientation-value" class="status-value">0, 0, 0</span>
+      </div>
+      <div class="status-card">
+        <span class="status-label">Connection</span>
+        <span id="status-value" class="status-value">Waiting for glasses</span>
+      </div>
+    </section>
+
+    <section class="panel settings">
+      <h2>Basic Settings</h2>
+      <div class="settings-grid">
+        <div class="setting-row">
+          <span>Sky mode</span>
+          <select id="setting-view-mode">
+            <option value="Stars">Stars</option>
+            <option value="DeepSky">Deep Sky</option>
+          </select>
         </div>
-        <p class="note">Sky view: 576×220 | Menu area: 576×68 below</p>
-        <button id="test-image" style="margin-top:10px;padding:8px 16px;background:#0f3460;color:#fff;border:none;border-radius:4px;cursor:pointer;">Send Test Pattern</button>
+        <div class="setting-row">
+          <span>Location</span>
+          <button id="setting-refresh-location" type="button">Refresh location</button>
+        </div>
+        <div id="setting-location-status" class="setting-hint">Uses your phone GPS when available.</div>
+        <div class="setting-row">
+          <span>Orientation calibration</span>
+          <button id="setting-reset-orientation" type="button">Reset orientation</button>
+        </div>
+        <div class="setting-row">
+          <label for="setting-show-simulator">Show advanced menu simulator</label>
+          <input id="setting-show-simulator" type="checkbox">
+        </div>
       </div>
-    </div>
+    </section>
+
+    <section class="panel glasses-preview">
+      <h2>Glasses Preview</h2>
+      <div class="glasses-frame">
+        <canvas id="preview-canvas" width="576" height="235"></canvas>
+      </div>
+      <p class="note">Sky view: 576x235 | Menu area: 576x53 below</p>
+      <button id="test-image" style="margin-top:10px;padding:8px 16px;background:#0f3460;color:#fff;border:none;border-radius:4px;cursor:pointer;">Send Test Pattern</button>
+
+      <div id="menu-sim" class="menu-sim" style="display:none;">
+        <h4>Menu Simulator (double-click at root to switch)</h4>
+        <div id="menu-sim-buttons" class="menu-sim-buttons">
+          <!-- Buttons generated by JS -->
+        </div>
+      </div>
+    </section>
   </div>
   
 </body>
