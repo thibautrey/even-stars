@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Even Stars - Sky Chart (Debug)</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #1a1a2e;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+    .container {
+      max-width: 600px;
+      width: 100%;
+    }
+    h1 {
+      color: #fff;
+      text-align: center;
+      margin-bottom: 10px;
+      font-size: 24px;
+    }
+    .subtitle {
+      color: #888;
+      text-align: center;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+    .debug-panel {
+      background: #16213e;
+      border-radius: 12px;
+      padding: 24px;
+      border: 1px solid #0f3460;
+    }
+    .debug-info {
+      color: #eaeaea;
+      line-height: 1.8;
+      font-size: 14px;
+    }
+    .debug-info .status {
+      font-weight: bold;
+      padding: 4px 8px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-bottom: 8px;
+    }
+    .debug-info .status.connected {
+      background: #2ecc71;
+      color: #000;
+    }
+    .debug-info .status.disconnected {
+      background: #e74c3c;
+      color: #fff;
+    }
+    .debug-info .location,
+    .debug-info .orientation,
+    .debug-info .mode {
+      color: #a0a0a0;
+      margin-bottom: 4px;
+    }
+    .debug-info .help {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #0f3460;
+      color: #888;
+      font-size: 12px;
+    }
+    .debug-info .help p {
+      margin-bottom: 4px;
+    }
+    .glasses-preview {
+      margin-top: 24px;
+      text-align: center;
+    }
+    .glasses-preview h3 {
+      color: #888;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+    }
+    .glasses-frame {
+      display: inline-block;
+      border: 2px solid #333;
+      border-radius: 8px;
+      padding: 8px;
+      background: #000;
+    }
+    #preview-canvas {
+      width: 288px;
+      height: 110px;
+      background: #000;
+      border: 1px solid #333;
+      image-rendering: pixelated;
+    }
+    @media (min-width: 768px) {
+      #preview-canvas {
+        width: 576px;
+        height: 220px;
+      }
+    }
+    .note {
+      color: #666;
+      font-size: 11px;
+      margin-top: 8px;
+    }
+  </style>
+  <script type="module" crossorigin src="/assets/main-D9XN5265.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>🌟 Even Stars</h1>
+    <p class="subtitle">Sky Chart for Even Realities Glasses</p>
+    
+    <div class="debug-panel">
+      <div id="debug-info" class="debug-info">
+        <div class="status disconnected">Initializing...</div>
+      </div>
+      
+      <div class="glasses-preview">
+        <h3>Glasses Display (576 × 288)</h3>
+        <div class="glasses-frame">
+          <canvas id="preview-canvas" width="576" height="220"></canvas>
+        </div>
+        <p class="note">Sky view: 576×220 | Menu area: 576×68 below</p>
+        <button id="test-image" style="margin-top:10px;padding:8px 16px;background:#0f3460;color:#fff;border:none;border-radius:4px;cursor:pointer;">Send Test Pattern</button>
+      </div>
+    </div>
+  </div>
+  
+</body>
+</html>
