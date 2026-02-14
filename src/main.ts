@@ -295,25 +295,41 @@ function setupEventListeners(): void {
     if (event.listEvent) {
       const listEvent = event.listEvent;
       
-      // Try multiple ways to access the data
-      // 1. Direct jsonData property (from SDK raw data)
-      // 2. toJson() method (protobuf conversion)
-      // 3. Direct property access
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const jsonData = listEvent.jsonData || (listEvent.toJson ? listEvent.toJson() : listEvent);
+      // Try to extract selection data from the SDK event
+      let itemName = listEvent.currentSelectItemName;
+      let itemIndex = listEvent.currentSelectItemIndex;
+      const containerID = listEvent.containerID;
       
-      console.log('List event debug:', {
-        raw: listEvent,
-        jsonData: jsonData,
-        rawContainerID: listEvent.containerID,
-        rawItemName: listEvent.currentSelectItemName,
-        jsonContainerID: jsonData?.containerID,
-        jsonItemName: jsonData?.currentSelectItemName,
-      });
+      // Try toJson() conversion if direct access didn't work
+      if ((!itemName || itemIndex === undefined) && typeof listEvent.toJson === 'function') {
+        try {
+          const jsonData = listEvent.toJson();
+          itemName = itemName || jsonData?.currentSelectItemName;
+          itemIndex = itemIndex !== undefined ? itemIndex : jsonData?.currentSelectItemIndex;
+        } catch (e) {
+          // Ignore conversion error
+        }
+      }
       
-      // Extract properties from jsonData if available, otherwise from listEvent
-      const itemName = jsonData?.currentSelectItemName ?? listEvent.currentSelectItemName;
-      const containerID = jsonData?.containerID ?? listEvent.containerID;
+      // Log what we received from the SDK
+      const hasName = itemName !== undefined && itemName !== null;
+      const hasIndex = itemIndex !== undefined && itemIndex !== null;
+      
+      if (hasName) {
+        console.log('✓ SDK event: received itemName =', itemName);
+      } else if (hasIndex) {
+        console.log('✓ SDK event: received itemIndex =', itemIndex);
+      } else {
+        console.log('⚠️  SDK event: missing both itemName and itemIndex');
+      }
+      
+      // If we have an index but no name, resolve the name from our menu items
+      if (itemIndex !== undefined && !itemName && containerID === CONTAINER_IDS.MENU) {
+        if (itemIndex >= 0 && itemIndex < appState.menuItems.length) {
+          itemName = appState.menuItems[itemIndex];
+          console.log('→ Resolved: index', itemIndex, '=', itemName);
+        }
+      }
       
       handleMenuEvent(itemName, containerID);
     } else if (event.textEvent) {
@@ -322,6 +338,38 @@ function setupEventListeners(): void {
       console.log('System event:', event.sysEvent);
     }
   });
+
+  // Setup keyboard controls for menu navigation (for testing/simulator)
+  // This is a temporary solution while SDK event data is being debugged
+  window.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      console.log('→ Key pressed - cycling to next mode');
+      cycleMode(appState);
+      updateBrowserDisplay();
+      render();
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      console.log('← Key pressed - cycling to previous mode');
+      const currentIndex = appState.selectedMenuIndex;
+      const newIndex = (currentIndex - 1 + appState.menuItems.length) % appState.menuItems.length;
+      const itemName = appState.menuItems[newIndex];
+      handleMenuEvent(itemName, CONTAINER_IDS.MENU);
+    } else if (e.key >= '1' && e.key <= '9') {
+      const index = parseInt(e.key) - 1;
+      if (index >= 0 && index < appState.menuItems.length) {
+        e.preventDefault();
+        const itemName = appState.menuItems[index];
+        console.log(`Keyboard: Selecting menu item ${index + 1}: "${itemName}"`);
+        handleMenuEvent(itemName, CONTAINER_IDS.MENU);
+      }
+    }
+  });
+
+  console.log('✓ Keyboard controls enabled (for testing):');
+  console.log('  → (right arrow) = next mode');
+  console.log('  ← (left arrow) = previous mode');
+  console.log('  1/2/3 = select by number');
 }
 
 /**
@@ -329,22 +377,31 @@ function setupEventListeners(): void {
  * Simplified single-menu system
  */
 function handleMenuEvent(itemName: string | undefined, containerID?: number): void {
-  console.log('handleMenuEvent called:', { itemName, containerID });
+  console.log('handleMenuEvent called:', { itemName, containerID, menuItems: appState.menuItems });
   
   if (!itemName) {
-    console.warn('Menu event received but itemName is undefined');
+    console.warn('⚠️  Menu event received but itemName is undefined', { containerID });
+    console.warn('📋 Available menu items:', appState.menuItems);
+    console.log('💡 Tip: Use keyboard controls to test menu (→ ← 1 2 3 keys)');
+    console.log('    Or call handleMenuByIndex(0/1/2) from console');
     return;
   }
 
-  console.log('Menu selected:', itemName);
+  // Validate that the item name is in our menu
+  if (!appState.menuItems.includes(itemName)) {
+    console.warn('❌ Menu item not recognized:', itemName, 'from items:', appState.menuItems);
+    return;
+  }
+
+  console.log('✓ Menu selected:', itemName);
 
   const newMode = handleMenuSelect(appState, itemName);
   if (newMode !== null) {
-    console.log('Switched to mode:', newMode);
+    console.log('✓ Switched to mode:', newMode);
     updateBrowserDisplay();
     render();
   } else {
-    console.warn('Unknown menu item:', itemName);
+    console.warn('❌ Unknown menu item:', itemName);
   }
 }
 
@@ -504,6 +561,16 @@ window.addEventListener('beforeunload', cleanup);
 
 // Expose menu functions to window for console testing
 (window as unknown as Record<string, unknown>).handleMenuEvent = handleMenuEvent;
+(window as unknown as Record<string, unknown>).handleMenuByIndex = (index: number) => {
+  if (index >= 0 && index < appState.menuItems.length) {
+    const itemName = appState.menuItems[index];
+    console.log(`Testing menu selection: index ${index} → "${itemName}"`);
+    handleMenuEvent(itemName, CONTAINER_IDS.MENU);
+  } else {
+    console.error(`Invalid menu index: ${index}, valid range: 0-${appState.menuItems.length - 1}`);
+    console.log('Available items:', appState.menuItems);
+  }
+};
 (window as unknown as Record<string, unknown>).cycleMode = () => {
   const newMode = cycleMode(appState);
   console.log('Mode cycled to:', newMode);
@@ -511,6 +578,14 @@ window.addEventListener('beforeunload', cleanup);
   render();
 };
 (window as unknown as Record<string, unknown>).appState = appState;
+(window as unknown as Record<string, unknown>).menuDebug = () => {
+  console.log('=== Menu Debug Info ===');
+  console.log('Current app mode:', appState.appMode);
+  console.log('Menu items:', appState.menuItems);
+  console.log('Selected index:', appState.selectedMenuIndex);
+  console.log('Container IDs:', CONTAINER_IDS);
+  console.log('To test menu selection by index, call: handleMenuByIndex(0), handleMenuByIndex(1), handleMenuByIndex(2)');
+};
 
 // Start the application
 init().catch((error) => {
