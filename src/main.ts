@@ -1,5 +1,5 @@
 // Even Stars - Main entry point
-// Sky chart application for Even Realities smart glasses
+// Astronomical Compass for Even Realities smart glasses
 
 import { 
   waitForEvenAppBridge, 
@@ -8,10 +8,10 @@ import {
 } from '@evenrealities/even_hub_sdk';
 
 import type { 
-  AppState, 
+  CompassState, 
   HeadOrientation,
 } from './types';
-import { ViewMode, StarFilter, ConstellationFilter, PlanetFilter, DeepSkyFilter, ActiveMenu } from './types';
+import { AppMode } from './types';
 
 import { 
   renderSkyToBuffer,
@@ -20,39 +20,16 @@ import {
 } from './sky/renderer';
 
 import { 
-  createStartupPageConfig,
-  createSkyViewContainer,
-  createLeftMenuContainer,
-  createRightMenuContainer,
+  createSimplifiedStartupConfig,
+  createSimplifiedRebuildConfig,
   CONTAINER_IDS,
 } from './ui/containers';
 
 import {
-  createInitialSecondaryMenuState,
-  navigateInto,
-  navigateBack,
-  getCurrentMenuNames,
-  findMenuItem,
-  canGoBack,
-  toStarFilter,
-  toConstellationFilter,
-  toPlanetFilter,
-  toDeepSkyFilter,
-  switchActiveMenu,
-} from './ui/menu';
-
-
-
-import {
-  createInitialSearchMenuState,
-  navigateToCategory,
-  navigateSearchBack,
-  getSearchMenuNames,
-  canSearchGoBack,
-  getSelectedObject,
-} from './ui/searchMenu';
-
-import { createInitialSearchState } from './types/search';
+  getMenuItemNames,
+  handleMenuSelect,
+  cycleMode,
+} from './ui/simpleMenu';
 
 import {
   getCurrentPosition,
@@ -69,22 +46,16 @@ import {
   formatOrientation,
 } from './sensors/gyroscope';
 
-// Application state
-const appState: AppState = {
+// Application state - Simplified for Astronomical Compass
+const appState: CompassState = {
   isConnected: false,
   location: null,
   orientation: { ...DEFAULT_ORIENTATION },
-  viewMode: ViewMode.Stars,
-  selectedStar: null,
-  menuState: createInitialSearchMenuState(), // Left menu is now the search menu
-  secondaryMenuState: createInitialSecondaryMenuState(),
-  activeMenu: ActiveMenu.Left,
-  starFilter: StarFilter.All,
-  constellationFilter: ConstellationFilter.All,
-  planetFilter: PlanetFilter.All,
-  deepSkyFilter: DeepSkyFilter.All,
-  searchState: createInitialSearchState(),
-  finderTarget: null,
+  appMode: AppMode.Identify,
+  identifiedObject: null,
+  focusTarget: null,
+  menuItems: getMenuItemNames(),
+  selectedMenuIndex: 0,
 };
 
 // SDK bridge instance
@@ -106,16 +77,11 @@ const RENDER_INTERVAL = 100; // Render at 10 FPS to avoid overloading glasses
 // Image update queue
 let imageUpdatePending = false;
 
-const MENU_ACTION_BACK = '[Back]';
-const MENU_SWITCH_DOUBLE_CLICK_THRESHOLD = 600;
-let lastMenuSwitchClickTime = 0;
-let lastMenuSwitchItem: string | null = null;
-
 /**
  * Initialize the application
  */
 async function init(): Promise<void> {
-  console.log('Even Stars - Initializing...');
+  console.log('Even Stars - Astronomical Compass Initializing...');
 
   // Initialize offscreen canvas for glasses rendering
   initSkyCanvas();
@@ -144,7 +110,6 @@ async function init(): Promise<void> {
     await initGlassesUI();
     setupEventListeners();
     appState.isConnected = true;
-    void updateMenuDisplay();
     updateBrowserDisplay();
   } catch (error) {
     console.warn('Even App Bridge not available:', error);
@@ -160,10 +125,8 @@ async function init(): Promise<void> {
   // Initial render
   render();
   
-  console.log('Even Stars initialized. Menu functions available in console:');
-  console.log('  - handleListEvent(name): simulate menu click');
-  console.log('  - switchMenuFocus(): switch active menu');
-  console.log('  - appState: view current state');
+  console.log('Even Stars initialized. Current mode:', appState.appMode);
+  console.log('Available modes:', appState.menuItems);
 }
 
 /**
@@ -189,10 +152,12 @@ function initSkyCanvas(): void {
  */
 function initBrowserDisplay(): void {
   // Bind basic user settings controls
-  const viewModeSelect = document.getElementById('setting-view-mode') as HTMLSelectElement | null;
-  if (viewModeSelect) {
-    viewModeSelect.addEventListener('change', () => {
-      appState.viewMode = viewModeSelect.value === ViewMode.DeepSky ? ViewMode.DeepSky : ViewMode.Stars;
+  const modeCycleButton = document.getElementById('mode-cycle-btn');
+  if (modeCycleButton) {
+    modeCycleButton.addEventListener('click', () => {
+      const newMode = cycleMode(appState);
+      console.log('Mode cycled to:', newMode);
+      updateMenuDisplay();
       updateBrowserDisplay();
       render();
     });
@@ -229,28 +194,7 @@ function initBrowserDisplay(): void {
   updateBrowserDisplay();
 }
 
-function canMenuGoBack(menu: ActiveMenu): boolean {
-  return menu === ActiveMenu.Left
-    ? canSearchGoBack(appState.menuState)
-    : canGoBack(appState.secondaryMenuState);
-}
-
-function getBaseMenuItems(menu: ActiveMenu): string[] {
-  return menu === ActiveMenu.Left
-    ? getSearchMenuNames(appState.menuState)
-    : getCurrentMenuNames(appState.secondaryMenuState);
-}
-
-function getDisplayMenuItems(menu: ActiveMenu): string[] {
-  const items: string[] = [];
-
-  if (canMenuGoBack(menu)) {
-    items.push(MENU_ACTION_BACK);
-  }
-
-  items.push(...getBaseMenuItems(menu));
-  return items;
-}
+// Menu handling is now simplified - single menu with mode selection
 
 /**
  * Update the browser companion display
@@ -261,7 +205,6 @@ function updateBrowserDisplay(): void {
   const modeEl = document.getElementById('mode-value');
   const targetPill = document.getElementById('target-pill');
   const orientationEl = document.getElementById('orientation-value');
-  const viewModeSelect = document.getElementById('setting-view-mode') as HTMLSelectElement | null;
   const connectionBadge = document.getElementById('connection-badge');
 
   if (statusEl) {
@@ -275,11 +218,14 @@ function updateBrowserDisplay(): void {
     locationEl.textContent = appState.location ? formatLocation(appState.location) : 'Unknown';
   }
   if (modeEl) {
-    modeEl.textContent = appState.viewMode;
+    modeEl.textContent = appState.appMode;
   }
   if (targetPill) {
-    if (appState.finderTarget?.name) {
-      targetPill.textContent = `★ ${appState.finderTarget.name}`;
+    if (appState.focusTarget?.name) {
+      targetPill.textContent = `★ ${appState.focusTarget.name}`;
+      targetPill.style.display = 'inline-flex';
+    } else if (appState.identifiedObject?.object.name) {
+      targetPill.textContent = `★ ${appState.identifiedObject.object.name}`;
       targetPill.style.display = 'inline-flex';
     } else {
       targetPill.textContent = '';
@@ -289,9 +235,6 @@ function updateBrowserDisplay(): void {
   if (orientationEl) {
     orientationEl.textContent = formatOrientation(appState.orientation);
   }
-  if (viewModeSelect) {
-    viewModeSelect.value = appState.viewMode;
-  }
 }
 
 /**
@@ -300,8 +243,8 @@ function updateBrowserDisplay(): void {
 async function initGlassesUI(): Promise<void> {
   if (!bridge) return;
 
-  const config = createStartupPageConfig();
-  console.log('Creating glasses UI with config:', JSON.stringify(config.toJson(), null, 2));
+  const config = createSimplifiedStartupConfig(appState.menuItems);
+  console.log('Creating glasses UI with simplified config:', JSON.stringify(config.toJson(), null, 2));
   const result = await bridge.createStartUpPageContainer(config);
 
   switch (result) {
@@ -309,7 +252,6 @@ async function initGlassesUI(): Promise<void> {
       console.log('Glasses UI created successfully');
       // Send initial image after a short delay to ensure container is ready
       setTimeout(() => {
-        void updateMenuDisplay();
         render();
       }, 500);
       break;
@@ -348,243 +290,70 @@ function setupEventListeners(): void {
 
   // Listen for UI events
   evenHubEventUnsubscribe = bridge.onEvenHubEvent((event) => {
+    // Handle list events - access properties directly from protobuf object
     if (event.listEvent) {
-      handleListEvent(event.listEvent.currentSelectItemName, event.listEvent.containerID);
+      // Access list event properties - may need to use toJson() or direct access
+      const listEvent = event.listEvent;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const listEventData = (listEvent as any).toJson ? (listEvent as any).toJson() : listEvent;
+      
+      console.log('List event raw:', listEvent);
+      console.log('List event data:', listEventData);
+      
+      const itemName = listEventData.currentSelectItemName || listEvent.currentSelectItemName;
+      const containerID = listEventData.containerID || listEvent.containerID;
+      
+      handleMenuEvent(itemName, containerID);
     } else if (event.textEvent) {
       console.log('Text event:', event.textEvent);
     } else if (event.sysEvent) {
-      console.log('System event:', event.sysEvent.eventType);
+      console.log('System event:', event.sysEvent);
     }
   });
 }
 
 /**
- * Handle list selection events from glasses
- * Uses explicit single-click actions with menu control items.
+ * Handle menu selection events from glasses
+ * Simplified single-menu system
  */
-function handleListEvent(itemName: string | undefined, containerId?: number): void {
+function handleMenuEvent(itemName: string | undefined, containerID?: number): void {
+  console.log('handleMenuEvent called:', { itemName, containerID });
+  
   if (!itemName) {
+    console.warn('Menu event received but itemName is undefined');
     return;
   }
 
-  const sourceMenu = getSourceMenu(itemName, containerId);
-  if (!sourceMenu) {
-    console.warn('Menu event could not be mapped to a menu:', { itemName, containerId });
-    return;
-  }
+  console.log('Menu selected:', itemName);
 
-  if (sourceMenu !== appState.activeMenu) {
-    console.log('Ignoring selection from inactive menu:', { itemName, sourceMenu, active: appState.activeMenu });
-    return;
-  }
-
-  if (
-    appState.menuState.level === 0 &&
-    appState.secondaryMenuState.level === 0 &&
-    itemName !== MENU_ACTION_BACK
-  ) {
-    const now = Date.now();
-    const isSameItem = lastMenuSwitchItem === itemName;
-    const timeSinceLast = now - lastMenuSwitchClickTime;
-    if (isSameItem && timeSinceLast < MENU_SWITCH_DOUBLE_CLICK_THRESHOLD) {
-      switchMenuFocus();
-      lastMenuSwitchClickTime = 0;
-      lastMenuSwitchItem = null;
-      return;
-    }
-    lastMenuSwitchClickTime = now;
-    lastMenuSwitchItem = itemName;
-  }
-
-  const handled = handleMenuSingleClick(itemName, sourceMenu);
-  if (!handled) {
-    console.warn('Menu item not handled:', itemName);
-    return;
-  }
-
-  void updateMenuDisplay();
-  updateBrowserDisplay();
-  render();
-}
-
-function getSourceMenu(itemName: string, containerId?: number): ActiveMenu | null {
-  if (containerId === CONTAINER_IDS.LEFT_MENU) {
-    return ActiveMenu.Left;
-  }
-
-  if (containerId === CONTAINER_IDS.RIGHT_MENU) {
-    return ActiveMenu.Right;
-  }
-
-  if (getDisplayMenuItems(appState.activeMenu).includes(itemName)) {
-    return appState.activeMenu;
-  }
-
-  const otherMenu = appState.activeMenu === ActiveMenu.Left ? ActiveMenu.Right : ActiveMenu.Left;
-  if (getDisplayMenuItems(otherMenu).includes(itemName)) {
-    return otherMenu;
-  }
-
-  return null;
-}
-
-/**
- * Switch focus between left and right menus
- */
-function switchMenuFocus(): void {
-  appState.activeMenu = switchActiveMenu(appState.activeMenu);
-  console.log('Switched to menu:', appState.activeMenu);
-
-  void updateMenuDisplay();
-  updateBrowserDisplay();
-}
-
-/**
- * Handle single click on menu item
- * Returns true when the click changed application state.
- */
-function handleMenuSingleClick(itemName: string, sourceMenu: ActiveMenu = appState.activeMenu): boolean {
-  if (sourceMenu === ActiveMenu.Left) {
-    return handleSearchMenuClick(itemName);
-  }
-
-  return handleViewMenuClick(itemName);
-}
-
-/**
- * Handle click on the search/finder menu (left menu).
- */
-function handleSearchMenuClick(itemName: string): boolean {
-  if (itemName === MENU_ACTION_BACK) {
-    const wentBack = navigateSearchBack(appState.menuState);
-    if (wentBack) {
-      console.log('Search: Navigated back to categories');
-    }
-    return wentBack;
-  }
-
-  if (appState.menuState.level === 0) {
-    const success = navigateToCategory(appState.menuState, itemName);
-    if (success) {
-      console.log('Search: Showing category:', itemName);
-    }
-    return success;
-  }
-
-  const selectedObject = getSelectedObject(itemName);
-  if (!selectedObject) {
-    return false;
-  }
-
-  if (appState.finderTarget?.id === selectedObject.id) {
-    appState.finderTarget = null;
-    console.log('Finder: Cleared target');
+  const newMode = handleMenuSelect(appState, itemName);
+  if (newMode !== null) {
+    console.log('Switched to mode:', newMode);
+    updateBrowserDisplay();
+    render();
   } else {
-    appState.finderTarget = selectedObject;
-    console.log('Finder: Target set to', selectedObject.name, selectedObject);
-  }
-
-  return true;
-}
-
-/**
- * Handle click on the view/filter menu (right menu).
- */
-function handleViewMenuClick(itemName: string): boolean {
-  if (itemName === MENU_ACTION_BACK) {
-    const wentBack = navigateBack(appState.secondaryMenuState);
-    if (wentBack) {
-      console.log('Navigated back in right menu');
-    }
-    return wentBack;
-  }
-
-  const rightMenuItem = findMenuItem(appState.secondaryMenuState, itemName);
-  if (!rightMenuItem) {
-    return false;
-  }
-
-  const enteredSubmenu = navigateInto(appState.secondaryMenuState, itemName);
-  if (enteredSubmenu) {
-    applyViewSelection(rightMenuItem);
-    console.log('Navigated into right submenu:', itemName);
-    return true;
-  }
-
-  applyViewSelection(rightMenuItem);
-  return true;
-}
-
-function applyViewSelection(item: NonNullable<ReturnType<typeof findMenuItem>>): void {
-  if (!item.viewMode) {
-    return;
-  }
-
-  appState.viewMode = item.viewMode;
-
-  switch (item.viewMode) {
-    case ViewMode.Stars:
-      if (item.value) {
-        appState.starFilter = toStarFilter(item.value);
-        console.log('Star filter changed to:', appState.starFilter);
-      }
-      break;
-    case ViewMode.Constellations:
-      if (item.value) {
-        appState.constellationFilter = toConstellationFilter(item.value);
-      }
-      break;
-    case ViewMode.Planets:
-      if (item.value) {
-        appState.planetFilter = toPlanetFilter(item.value);
-      }
-      break;
-    case ViewMode.DeepSky:
-      if (item.value) {
-        appState.deepSkyFilter = toDeepSkyFilter(item.value);
-        console.log('Deep sky filter changed to:', appState.deepSkyFilter);
-      }
-      break;
-    default:
-      break;
+    console.warn('Unknown menu item:', itemName);
   }
 }
 
 /**
- * Update the glasses menu display with current menu items from both menus
+ * Update the glasses menu display
+ * Simplified single-menu layout
  */
 async function updateMenuDisplay(): Promise<void> {
   if (!bridge || !appState.isConnected) return;
   
-  const leftMenuNames = getDisplayMenuItems(ActiveMenu.Left);
-  const rightMenuNames = getDisplayMenuItems(ActiveMenu.Right);
-  console.log('Rebuilding menus - Left (Search):', leftMenuNames, 'Right:', rightMenuNames, 'Active:', appState.activeMenu);
+  console.log('Rebuilding menu with items:', appState.menuItems, 'Current mode:', appState.appMode);
   
   try {
-    // Create both menu containers with appropriate active state
-    const isLeftActive = appState.activeMenu === ActiveMenu.Left;
-    const leftMenuContainer = createLeftMenuContainer(leftMenuNames, isLeftActive);
-    const rightMenuContainer = createRightMenuContainer(rightMenuNames, !isLeftActive);
-    const skyViewContainer = createSkyViewContainer();
+    const config = createSimplifiedRebuildConfig(appState.menuItems);
     
-    const success = await bridge.rebuildPageContainer({
-      containerTotalNum: 3,
-      imageObject: [skyViewContainer],
-      listObject: [leftMenuContainer, rightMenuContainer],
-      toJson: function() {
-        return {
-          containerTotalNum: 3,
-          imageObject: this.imageObject?.map(o => o.toJson()) || [],
-          textObject: this.textObject?.map(o => o.toJson()) || [],
-          listObject: this.listObject?.map(o => o.toJson()) || [],
-        };
-      },
-    });
+    const success = await bridge.rebuildPageContainer(config);
     
     if (success) {
-      console.log('Menus rebuilt successfully');
+      console.log('Menu rebuilt successfully');
     } else {
-      console.error('Failed to rebuild menus');
+      console.error('Failed to rebuild menu');
     }
   } catch (error) {
     console.error('Error updating menu display:', error);
@@ -631,17 +400,18 @@ function render(): void {
   if (!skyCtx || !appState.location) return;
 
   // Render sky to offscreen canvas (for glasses)
+  // TODO: Update renderSkyToBuffer to accept CompassState
   renderSkyToBuffer({
     ctx: skyCtx,
     location: appState.location,
     orientation: appState.orientation,
-    viewMode: appState.viewMode,
-    selectedStar: appState.selectedStar,
-    starFilter: appState.starFilter,
-    constellationFilter: appState.constellationFilter,
-    planetFilter: appState.planetFilter,
-    deepSkyFilter: appState.deepSkyFilter,
-    finderTarget: appState.finderTarget,
+    viewMode: 'Stars' as any, // Temporary - will be refactored in Task 3.3
+    selectedStar: null,
+    starFilter: 'all' as any,
+    constellationFilter: 'all' as any,
+    planetFilter: 'all' as any,
+    deepSkyFilter: 'all' as any,
+    finderTarget: appState.focusTarget as any,
   });
 
   // Update glasses display
@@ -662,7 +432,6 @@ async function updateGlassesDisplay(): Promise<void> {
 
   // Queue image update to avoid concurrent transmissions
   imageUpdatePending = true;
-  console.log('Updating glasses display...');
 
   try {
     // Convert canvas to base64 PNG - the SDK/simulator expects an image format
@@ -672,8 +441,6 @@ async function updateGlassesDisplay(): Promise<void> {
     // Remove the data URL prefix to get just the base64 string
     const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
     
-    console.log(`Image: ${CANVAS_WIDTH}x${CANVAS_HEIGHT}, base64 length: ${base64Data.length}`);
-
     // Update the sky view container on glasses
     const { ImageRawDataUpdate } = await import('@evenrealities/even_hub_sdk');
     const imageUpdate = ImageRawDataUpdate.fromJson({
@@ -682,11 +449,9 @@ async function updateGlassesDisplay(): Promise<void> {
       imageData: base64Data,  // Send as base64 string
     });
     
-    console.log('Sending PNG to glasses...');
-    const result = await bridge.updateImageRawData(imageUpdate);
-    console.log('Result:', result);
-
-
+    // Send image to glasses
+    await bridge.updateImageRawData(imageUpdate);
+    console.log('Image updated successfully');
 
   } catch (error) {
     console.error('Error updating glasses display:', error);
@@ -727,9 +492,13 @@ function cleanup(): void {
 window.addEventListener('beforeunload', cleanup);
 
 // Expose menu functions to window for console testing
-(window as unknown as Record<string, unknown>).handleListEvent = handleListEvent;
-(window as unknown as Record<string, unknown>).handleMenuSingleClick = handleMenuSingleClick;
-(window as unknown as Record<string, unknown>).switchMenuFocus = switchMenuFocus;
+(window as unknown as Record<string, unknown>).handleMenuEvent = handleMenuEvent;
+(window as unknown as Record<string, unknown>).cycleMode = () => {
+  const newMode = cycleMode(appState);
+  console.log('Mode cycled to:', newMode);
+  updateBrowserDisplay();
+  render();
+};
 (window as unknown as Record<string, unknown>).appState = appState;
 
 // Start the application

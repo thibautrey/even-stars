@@ -73,9 +73,9 @@ Even Stars is a **heads-up astronomical compass** for Even Realities smart glass
 
 ### Critical Gaps
 
-1. **AppMode System** - Plan calls for `AppMode` enum (`Identify`, `TargetFinder`, `ConstellationHints`) but code uses `ViewMode` (`Stars`, `Constellations`, `Planets`, `DeepSky`)
+1. **AppMode System** ✅ - Implemented `AppMode` enum (`Identify`, `TargetFinder`, `ConstellationHints`)
 
-2. **FocusTarget Model** - Plan mentions `FocusTarget` type, but code uses `SearchableObject` + `finderTarget`
+2. **FocusTarget Model** ✅ - Implemented `FocusTarget` type with id, name, type, ra, dec, magnitude, info, and direction properties
 
 3. **Text-First Rendering** - Current code renders full canvas sky map. Plan requires:
    - Text overlays as primary
@@ -84,16 +84,10 @@ Even Stars is a **heads-up astronomical compass** for Even Realities smart glass
 
 4. **Identify Mode** - Plan calls for "auto-detect nearest bright object, show name only if confident" - NOT IMPLEMENTED
 
-5. **Simplified Container Strategy** - Plan wants:
-   - Main Text (primary info)
-   - Secondary Text (context)
-   - List (event capture)
-   - Optional icon
-   
-   Current has:
-   - Image container (full sky view)
-   - Left menu (finder)
-   - Right menu (filters)
+5. **Simplified Container Strategy** 🔄 - Partially implemented:
+   - Single menu container for mode selection ✅
+   - Image container for sky view (to be replaced with text-first rendering)
+   - Text container for info display (to be added)
 
 6. **Performance Optimizations** - Plan specifies:
    - 5-10 FPS logic (✓ partially done)
@@ -110,11 +104,11 @@ Even Stars is a **heads-up astronomical compass** for Even Realities smart glass
 
 # Implementation Roadmap
 
-## Phase 1: Type System Alignment ✅ → 🔄
+## Phase 1: Type System Alignment ✅
 
 **Goal**: Align types with new "astronomical compass" architecture
 
-### Task 1.1: Add AppMode Enum
+### Task 1.1: Add AppMode Enum ✅
 ```typescript
 // Add to types/index.ts
 export enum AppMode {
@@ -124,9 +118,9 @@ export enum AppMode {
 }
 ```
 
-**Files to modify**: `src/types/index.ts`
+**Files modified**: `src/types/index.ts`
 
-### Task 1.2: Create FocusTarget Model
+### Task 1.2: Create FocusTarget Model ✅
 ```typescript
 // Add to types/index.ts
 export interface FocusTarget {
@@ -146,15 +140,15 @@ export interface FocusTarget {
 }
 ```
 
-**Files to modify**: `src/types/index.ts`
+**Files modified**: `src/types/index.ts`
 
-### Task 1.3: Update AppState Interface
-Replace `ViewMode`-centric state with `AppMode`:
-- Replace `viewMode: ViewMode` with `appMode: AppMode`
-- Replace `finderTarget: SearchableObject | null` with `focusTarget: FocusTarget | null`
-- Remove complex filter enums (simplify to context-driven)
+### Task 1.3: Update AppState Interface ✅
+Created new `CompassState` interface replacing `ViewMode`-centric state:
+- Replaced `viewMode: ViewMode` with `appMode: AppMode`
+- Replaced `finderTarget: SearchableObject | null` with `focusTarget: FocusTarget | null`
+- Simplified menu state to single selector
 
-**Files to modify**: `src/types/index.ts`, `src/main.ts`
+**Files modified**: `src/types/index.ts`
 
 ---
 
@@ -307,15 +301,18 @@ export function renderCompassView(
 
 **Files to modify**: `src/ui/containers.ts`
 
-### Task 4.2: Simplify Menu System
-Replace dual-menu with single mode selector:
+### Task 4.2: Simplify Menu System ✅
+Replaced dual-menu with single mode selector:
 - Menu items: `["Identify", "Find Target", "Constellations"]`
-- Click to cycle modes
+- Click to select mode directly
 - No submenus in initial version
 
-**Files to modify**: 
-- `src/ui/menu.ts` (simplify)
-- `src/ui/searchMenu.ts` (deprecate or simplify)
+**Files created**:
+- `src/ui/simpleMenu.ts` - New simplified menu module
+
+**Files modified**:
+- `src/ui/containers.ts` - Added `createSingleMenuContainer()` and `createSimplifiedStartupConfig()`
+- `src/main.ts` - Refactored to use simplified menu system and `CompassState`
 
 ### Task 4.3: Implement Text Container Upgrades
 Use SDK's `textContainerUpgrade` for updates instead of image streaming:
@@ -411,7 +408,7 @@ Use device status to pause updates when glasses not worn.
 1. ✅ **Task 1.1**: Add AppMode enum
 2. ✅ **Task 1.2**: Create FocusTarget model  
 3. ✅ **Task 1.3**: Update AppState
-4. 🔄 **Task 4.2**: Simplify menu to single selector
+4. ✅ **Task 4.2**: Simplify menu to single selector
 
 ## Week 2: Identify Mode
 5. 🆕 **Task 2.1**: Create object detection engine

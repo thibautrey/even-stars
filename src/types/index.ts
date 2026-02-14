@@ -236,3 +236,83 @@ export interface DeviceStatus {
   batteryLevel?: number;
   isCharging?: boolean;
 }
+
+// ============================================================================
+// NEW TYPES FOR ASTRONOMICAL COMPASS (v3)
+// ============================================================================
+
+/**
+ * Application modes for the astronomical compass
+ * - Identify: Auto-detect what's being looked at
+ * - TargetFinder: Guide to selected target
+ * - ConstellationHints: Show constellation outlines only
+ */
+export enum AppMode {
+  Identify = 'identify',
+  TargetFinder = 'finder',
+  ConstellationHints = 'hints',
+}
+
+/**
+ * Focus target for the astronomical compass
+ * Represents the currently selected or identified object
+ */
+export interface FocusTarget {
+  /** Unique identifier */
+  id: string;
+  /** Display name */
+  name: string;
+  /** Type of celestial object */
+  type: 'star' | 'planet' | 'constellation' | 'deepsky';
+  /** Right Ascension in hours */
+  ra: number;
+  /** Declination in degrees */
+  dec: number;
+  /** Visual magnitude (lower is brighter) */
+  magnitude?: number;
+  /** Additional info (constellation, distance, etc.) */
+  info?: string;
+  /** Direction guidance for rendering */
+  direction?: {
+    /** Azimuth in degrees */
+    azimuth: number;
+    /** Altitude in degrees */
+    altitude: number;
+    /** Angular distance from current view in degrees */
+    distance: number;
+  };
+}
+
+/**
+ * Identified object result from the detection engine
+ */
+export interface IdentifiedObject {
+  /** The identified object */
+  object: FocusTarget;
+  /** Confidence score (0-1) */
+  confidence: number;
+  /** Angular distance from view center in degrees */
+  angularDistance: number;
+}
+
+/**
+ * Simplified app state for astronomical compass
+ */
+export interface CompassState {
+  /** Whether connected to Even glasses */
+  isConnected: boolean;
+  /** Current location (if available) */
+  location: GeoLocation | null;
+  /** Current head orientation */
+  orientation: HeadOrientation;
+  /** Current app mode */
+  appMode: AppMode;
+  /** Currently identified object (in Identify mode) */
+  identifiedObject: IdentifiedObject | null;
+  /** Currently selected target (in TargetFinder mode) */
+  focusTarget: FocusTarget | null;
+  /** Menu items for the single selector */
+  menuItems: string[];
+  /** Currently selected menu index */
+  selectedMenuIndex: number;
+}

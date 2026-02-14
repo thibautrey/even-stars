@@ -135,6 +135,20 @@ Given the limited display area (576x288) and container constraints:
 4. **Error Handling**: Handle `StartUpPageCreateResult` errors appropriately
 5. **Type Safety**: Use full TypeScript support provided by SDK
 
+## Implementation Plan Workflow
+
+The project uses an `IMPLEMENTATION_PLAN.md` file to track development tasks and progress.
+
+### When the User Says "Continue Implementation"
+
+If the user asks to "continue implementation" and your context is empty (not in the middle of an implementation), follow this workflow:
+
+1. **Read the implementation plan** - Read `IMPLEMENTATION_PLAN.md` to understand the current state and pending tasks
+2. **Implement the next task** - Identify and implement the next pending task from the plan
+3. **Update the implementation plan** - After completing the task, update `IMPLEMENTATION_PLAN.md` to mark the task as done and reflect the current progress
+
+This ensures continuity between sessions and maintains a clear record of what has been accomplished.
+
 ## Testing
 
 - Use browser DevTools for initial UI layout testing

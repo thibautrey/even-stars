@@ -9,9 +9,12 @@ import type {
 import { ActiveMenu } from '../types';
 
 // Container IDs
+// Simplified layout: Main view (image/text) + Single menu
 export const CONTAINER_IDS = {
-  SKY_VIEW: 1,
-  INFO: 2,
+  SKY_VIEW: 1,      // Main view area (image or text)
+  INFO_TEXT: 2,     // Text info container (for text-first UI)
+  MENU: 3,          // Single mode selector menu
+  // Legacy IDs (for backward compatibility during migration)
   LEFT_MENU: 3,
   RIGHT_MENU: 4,
 } as const;
@@ -25,13 +28,14 @@ export const CANVAS_WIDTH = 576;
 export const CANVAS_HEIGHT = 232; // 288 - 56 for menu area (menu + padding)
 
 // Menu dimensions - must fit within 576x288
-// Layout: [8px margin][left menu][8px gap][right menu][8px margin]
-// Width: 8 + 276 + 8 + 276 + 8 = 576 ✓
+// Simplified layout: [8px margin][single menu][8px margin]
+// Width: 8 + 560 + 8 = 576 ✓
 export const MENU_HEIGHT = 40;
 export const MENU_Y_POSITION = 240; // 288 - 40 - 8 (bottom margin)
 export const MENU_SPACING = 8;      // Gap between menus
 export const LEFT_MENU_WIDTH = 276;  // (576 - 8 - 8 - 8) / 2 = 276
 export const RIGHT_MENU_WIDTH = 276;
+export const SINGLE_MENU_WIDTH = 560; // Full width for single menu
 
 /**
  * Create the main sky view image container
@@ -248,6 +252,92 @@ export function createStartupPageConfig(): CreateStartUpPageContainer {
     },
   };
   return config;
+}
+
+// ============================================================================
+// SIMPLIFIED SINGLE-MENU LAYOUT (for Astronomical Compass v3)
+// ============================================================================
+
+/**
+ * Create the single menu container (simplified mode selector)
+ * Full width menu for mode selection: Identify | Find Target | Constellations
+ */
+export function createSingleMenuContainer(
+  itemNames: string[] = ['Identify', 'Find Target', 'Constellations']
+): ListContainerProperty {
+  const itemContainer = {
+    itemCount: itemNames.length,
+    itemWidth: 0,
+    isItemSelectBorderEn: 1,
+    itemName: itemNames,
+    toJson: () => ({
+      itemCount: itemNames.length,
+      itemWidth: 0,
+      isItemSelectBorderEn: 1,
+      itemName: itemNames,
+    }),
+  };
+
+  return {
+    xPosition: 8,
+    yPosition: MENU_Y_POSITION,
+    width: SINGLE_MENU_WIDTH,
+    height: MENU_HEIGHT,
+    borderWidth: 1,
+    borderColor: 8, // White border
+    borderRdaius: 3,
+    paddingLength: 3,
+    containerID: CONTAINER_IDS.MENU,
+    containerName: 'mode-menu',
+    itemContainer,
+    isEventCapture: 1, // This is the only interactive container
+    toJson: () => ({
+      xPosition: 8,
+      yPosition: MENU_Y_POSITION,
+      width: SINGLE_MENU_WIDTH,
+      height: MENU_HEIGHT,
+      borderWidth: 1,
+      borderColor: 8,
+      borderRdaius: 3,
+      paddingLength: 3,
+      containerID: CONTAINER_IDS.MENU,
+      containerName: 'mode-menu',
+      itemContainer: itemContainer.toJson(),
+      isEventCapture: 1,
+    }),
+  };
+}
+
+/**
+ * Create simplified startup page config with single menu
+ * Used for the new Astronomical Compass mode
+ */
+export function createSimplifiedStartupConfig(
+  menuItems: string[] = ['Identify', 'Find Target', 'Constellations']
+): CreateStartUpPageContainer {
+  const config: CreateStartUpPageContainer = {
+    containerTotalNum: 2, // Image view + single menu
+    imageObject: [createSkyViewContainer()],
+    listObject: [createSingleMenuContainer(menuItems)],
+    toJson: function() {
+      return {
+        containerTotalNum: 2,
+        imageObject: this.imageObject?.map(o => o.toJson()) || [],
+        textObject: this.textObject?.map(o => o.toJson()) || [],
+        listObject: this.listObject?.map(o => o.toJson()) || [],
+      };
+    },
+  };
+  return config;
+}
+
+/**
+ * Create page rebuild config with single menu
+ */
+export function createSimplifiedRebuildConfig(
+  menuItems: string[] = ['Identify', 'Find Target', 'Constellations']
+): CreateStartUpPageContainer {
+  return createSimplifiedStartupConfig(menuItems);
 }
 
 /**
