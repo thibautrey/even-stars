@@ -289,19 +289,31 @@ function setupEventListeners(): void {
   });
 
   // Listen for UI events
-  evenHubEventUnsubscribe = bridge.onEvenHubEvent((event) => {
-    // Handle list events - access properties directly from protobuf object
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  evenHubEventUnsubscribe = bridge.onEvenHubEvent((event: any) => {
+    // Handle list events - SDK returns protobuf objects that need special handling
     if (event.listEvent) {
-      // Access list event properties - may need to use toJson() or direct access
       const listEvent = event.listEvent;
+      
+      // Try multiple ways to access the data
+      // 1. Direct jsonData property (from SDK raw data)
+      // 2. toJson() method (protobuf conversion)
+      // 3. Direct property access
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const listEventData = (listEvent as any).toJson ? (listEvent as any).toJson() : listEvent;
+      const jsonData = listEvent.jsonData || (listEvent.toJson ? listEvent.toJson() : listEvent);
       
-      console.log('List event raw:', listEvent);
-      console.log('List event data:', listEventData);
+      console.log('List event debug:', {
+        raw: listEvent,
+        jsonData: jsonData,
+        rawContainerID: listEvent.containerID,
+        rawItemName: listEvent.currentSelectItemName,
+        jsonContainerID: jsonData?.containerID,
+        jsonItemName: jsonData?.currentSelectItemName,
+      });
       
-      const itemName = listEventData.currentSelectItemName || listEvent.currentSelectItemName;
-      const containerID = listEventData.containerID || listEvent.containerID;
+      // Extract properties from jsonData if available, otherwise from listEvent
+      const itemName = jsonData?.currentSelectItemName ?? listEvent.currentSelectItemName;
+      const containerID = jsonData?.containerID ?? listEvent.containerID;
       
       handleMenuEvent(itemName, containerID);
     } else if (event.textEvent) {
@@ -451,7 +463,6 @@ async function updateGlassesDisplay(): Promise<void> {
     
     // Send image to glasses
     await bridge.updateImageRawData(imageUpdate);
-    console.log('Image updated successfully');
 
   } catch (error) {
     console.error('Error updating glasses display:', error);
