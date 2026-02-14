@@ -259,17 +259,17 @@ function updateBrowserDisplay(): void {
   const statusEl = document.getElementById('status-value');
   const locationEl = document.getElementById('location-value');
   const modeEl = document.getElementById('mode-value');
-  const targetEl = document.getElementById('target-value');
+  const targetPill = document.getElementById('target-pill');
   const orientationEl = document.getElementById('orientation-value');
   const viewModeSelect = document.getElementById('setting-view-mode') as HTMLSelectElement | null;
-  const statusBadge = document.getElementById('status-badge');
+  const connectionBadge = document.getElementById('connection-badge');
 
   if (statusEl) {
-    statusEl.textContent = appState.isConnected ? 'Connected' : 'Waiting for glasses';
+    statusEl.textContent = appState.isConnected ? 'Connected' : 'Waiting';
   }
-  if (statusBadge) {
-    statusBadge.className = appState.isConnected ? 'value-pill connected' : 'value-pill disconnected';
-    statusBadge.textContent = appState.isConnected ? 'Connected' : 'Disconnected';
+  if (connectionBadge) {
+    connectionBadge.className = appState.isConnected ? 'connection-badge connected' : 'connection-badge disconnected';
+    connectionBadge.textContent = appState.isConnected ? 'Connected' : 'Disconnected';
   }
   if (locationEl) {
     locationEl.textContent = appState.location ? formatLocation(appState.location) : 'Unknown';
@@ -277,8 +277,14 @@ function updateBrowserDisplay(): void {
   if (modeEl) {
     modeEl.textContent = appState.viewMode;
   }
-  if (targetEl) {
-    targetEl.textContent = appState.finderTarget?.name ?? 'None selected';
+  if (targetPill) {
+    if (appState.finderTarget?.name) {
+      targetPill.textContent = `★ ${appState.finderTarget.name}`;
+      targetPill.style.display = 'inline-flex';
+    } else {
+      targetPill.textContent = '';
+      targetPill.style.display = 'none';
+    }
   }
   if (orientationEl) {
     orientationEl.textContent = formatOrientation(appState.orientation);

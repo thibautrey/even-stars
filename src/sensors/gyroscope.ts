@@ -257,10 +257,10 @@ function updateKeyboardOrientation(): void {
  * Format orientation for display
  */
 export function formatOrientation(orientation: HeadOrientation): string {
-  const azimuth = orientation.azimuth.toFixed(1);
-  const pitch = orientation.pitch.toFixed(1);
-  // Roll available for future use
-  return `Az: ${azimuth}° | Alt: ${pitch}°`;
+  const azimuth = Math.round(orientation.azimuth);
+  const pitch = Math.round(orientation.pitch);
+  const roll = Math.round(orientation.roll);
+  return `${azimuth}°, ${pitch}°, ${roll}°`;
 }
 
 /**

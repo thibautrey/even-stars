@@ -1,368 +1,481 @@
-# Even Stars - Implementation Plan
+# Even Stars – Implementation Plan (v3 - Actionable)
 
 ## Project Overview
 
-Even Stars is a real-time sky chart application for Even Realities smart glasses. It displays a star map based on the user's geographic location and head orientation using gyroscope data.
+Even Stars is a **heads-up astronomical compass** for Even Realities smart glasses.
 
-**Current Status**: Foundation implemented, core features functional  
-**Target**: Production-ready sky chart with accurate astronomical positioning
-
----
-
-## Phase 1: Core Foundation ✅ COMPLETED
-
-### 1.1 Project Setup ✅
-- [x] Initialize TypeScript project with Vite
-- [x] Install Even Hub SDK (`@evenrealities/even_hub_sdk` v0.0.7)
-- [x] Configure build tools and TypeScript settings
-- [x] Set up project structure (`src/`, `dist/`, `public/`)
-
-### 1.2 Type System ✅
-- [x] Define core types (`src/types/index.ts`)
-  - [x] `Star` - HR number, name, RA/Dec, magnitude, spectral type
-  - [x] `HorizontalCoords` - Altitude/azimuth
-  - [x] `GeoLocation` - Latitude/longitude/altitude
-  - [x] `HeadOrientation` - Azimuth/pitch/roll
-  - [x] `Constellation` - Lines and star references
-  - [x] `ViewMode` - Stars/Constellations/Planets enum
-  - [x] `AppState` - Application state management
-
-### 1.3 Location Services ✅
-- [x] Implement geolocation wrapper (`src/location/geolocation.ts`)
-  - [x] Browser geolocation API integration
-  - [x] Position watching for real-time updates
-  - [x] localStorage persistence for last known location
-  - [x] Default fallback (Greenwich Observatory)
-  - [x] Location formatting utilities
-
-### 1.4 Sensor Integration ✅
-- [x] Gyroscope handling (`src/sensors/gyroscope.ts`)
-  - [x] DeviceOrientation API integration
-  - [x] iOS 13+ permission handling
-  - [x] Keyboard simulation fallback for desktop testing
-  - [x] Arrow key controls (↑↓←→) + R (reset)
-  - [x] Orientation normalization and formatting
+**Current Status**: Codebase has a functional dense sky-chart implementation  
+**Target**: Pivot to minimal "astronomical compass" optimized for glanceable AR
 
 ---
 
-## Phase 2: Sky Math & Data ✅ COMPLETED
+# ⚠️ Strategic Pivot Summary
 
-### 2.1 Star Catalog ✅
-- [x] Bright star dataset (`src/sky/stars.ts`)
-  - [x] ~100 brightest stars (magnitude < 3.0)
-  - [x] HR numbers, common names, RA/Dec coordinates
-  - [x] Spectral types and magnitudes
-  - [x] Helper functions: `getStarByHR()`, `getStarsByMagnitude()`
+| Before (Current Code) | After (Target) |
+|----------------------|----------------|
+| Dense real-time sky chart (~100 stars rendered) | Contextual guidance (1-3 labels max) |
+| Image-based rendering (canvas sky map) | Text-first rendering, minimal icons |
+| Complex dual-menu navigation | Simple mode switching |
+| 10 FPS image streaming | Text updates preferred, throttled images |
+| Full star catalog visualization | Nearest bright object identification only |
 
-### 2.2 Constellation Definitions ✅
-- [x] Line patterns for 12 major constellations (`src/sky/constellations.ts`)
-  - [x] Orion, Ursa Major, Cassiopeia, Ursa Minor
-  - [x] Gemini, Canis Major, Leo, Scorpius
-  - [x] Crux, Cygnus, Aquila, Taurus
-  - [x] Star-to-HR mapping for line connections
-
-### 2.3 Celestial Calculations ✅
-- [x] Coordinate transformation engine (`src/sky/calculator.ts`)
-  - [x] Julian Date calculation
-  - [x] Greenwich Mean Sidereal Time (GMST)
-  - [x] Local Sidereal Time (LST) from longitude
-  - [x] Hour Angle calculation
-  - [x] Equatorial to Horizontal conversion (RA/Dec → Alt/Az)
-  - [x] Angular distance between celestial objects
-  - [x] Field of view clipping logic
-  - [x] Canvas projection with FOV mapping
-  - [x] Simplified Moon position calculation
+**Core Principle**: *The sky is the UI. Overlays are hints.*
 
 ---
 
-## Phase 3: Rendering Engine ✅ COMPLETED
+# Gap Analysis: Current Code vs Plan
 
-### 3.1 Canvas Rendering ✅
-- [x] Browser canvas implementation (`src/sky/renderer.ts`)
-  - [x] 576x288 pixel output (matching glasses resolution)
-  - [x] Star rendering with magnitude-based sizing
-  - [x] Opacity gradient for brightness levels
-  - [x] Glow effect for bright stars (magnitude < 1.5)
-  - [x] Constellation line drawing
-  - [x] Cardinal direction markers (N/E/S/W)
-  - [x] Horizon line rendering
-  - [x] Selected star highlight ring
+## ✅ What's Already Implemented
 
-### 3.2 Image Generation ✅
-- [x] Binary image data generation for SDK
-  - [x] RGB to grayscale conversion
-  - [x] Alpha channel application
-  - [x] Uint8Array output for `updateImageRawData`
+### Foundation (Phase 1)
+- [x] TypeScript + Vite setup
+- [x] Even Hub SDK integration (`waitForEvenAppBridge`, `createStartUpPageContainer`)
+- [x] Type system (`Star`, `HorizontalCoords`, `GeoLocation`, `HeadOrientation`)
+- [x] Location services (GPS, fallback to Greenwich, localStorage persistence)
+- [x] Gyroscope integration (device + keyboard simulation fallback)
 
----
+### Sky Math & Data (Phase 2)
+- [x] Complete celestial calculations (`calculator.ts`)
+  - Julian Date, GMST, LST
+  - RA/Dec → Alt/Az conversion
+  - Hour angle calculations
+  - Field of view clipping
+- [x] Star catalog (100+ bright stars from Yale catalog)
+- [x] Constellation definitions (12 major constellations with line patterns)
+- [x] Planet orbital calculations (Mercury through Saturn)
+- [x] Deep sky object catalog (Messier objects)
 
-## Phase 4: UI & Glasses Integration ✅ COMPLETED
+### Current Rendering (Phase 3 - To be refactored)
+- [x] Canvas-based sky renderer (`renderer.ts`)
+- [x] Star rendering with magnitude-based sizing
+- [x] Constellation line rendering
+- [x] Planet rendering with symbols
+- [x] Deep sky object rendering
+- [x] Cardinal direction markers
+- [x] Label collision avoidance
+- [x] Finder arrow guidance to targets
+- [x] Image streaming to glasses (`updateImageRawData`)
 
-### 4.1 Container Layout ✅
-- [x] UI container definitions (`src/ui/containers.ts`)
-  - [x] Sky view container (576x220) - main display
-  - [x] Info panel (280x58) - object data
-  - [x] Mode selector (130x58) - Stars/Constellations/Planets
-  - [x] Status bar (126x58) - connection/battery
-  - [x] Proper `isEventCapture` assignment (only mode selector = 1)
+### UI & Menus (Phase 4 - To be simplified)
+- [x] Dual menu system (left + right)
+- [x] Search/finder menu with categories (Stars, Planets, DSO, Constellations)
+- [x] View filter menu (Stars vs Deep Sky with sub-filters)
+- [x] Menu navigation with back functionality
+- [x] SDK container management (3 containers: sky view + 2 menus)
 
-### 4.2 SDK Integration ✅
-- [x] Bridge initialization (`src/main.ts`)
-  - [x] `waitForEvenAppBridge()` handling
-  - [x] `createStartUpPageContainer()` with 4 containers
-  - [x] Error handling for container creation (codes 0-3)
-  - [x] Graceful fallback to browser-only mode
+### Target Finder (Phase 5 - Partial)
+- [x] Searchable object catalog (`searchCatalog.ts`)
+- [x] Target selection via menu
+- [x] Arrow rendering pointing to target
+- [x] Distance calculation and guidance text
 
-### 4.3 Event Handling ✅
-- [x] Device status monitoring
-  - [x] `onDeviceStatusChanged` listener
-  - [x] Connection state tracking
-- [x] User input handling
-  - [x] `onEvenHubEvent` for list selections
-  - [x] Mode switching (Stars/Constellations/Planets)
+## ❌ What's Missing / Misaligned
 
-### 4.4 Update System ✅
-- [x] Real-time display updates
-  - [x] `updateImageRawData()` for sky view
-  - [x] `textContainerUpgrade()` for info/status
-  - [x] Image update queuing (prevents concurrent sends)
-  - [x] 10 FPS render throttling
+### Critical Gaps
 
----
+1. **AppMode System** - Plan calls for `AppMode` enum (`Identify`, `TargetFinder`, `ConstellationHints`) but code uses `ViewMode` (`Stars`, `Constellations`, `Planets`, `DeepSky`)
 
-## Phase 5: Enhancements & Polish 🚧 IN PROGRESS
+2. **FocusTarget Model** - Plan mentions `FocusTarget` type, but code uses `SearchableObject` + `finderTarget`
 
-### 5.1 Extended Star Catalog 🚧
-- [ ] Expand to 300+ stars (magnitude < 4.5)
-- [ ] Add more named stars with common names
-- [ ] Include double stars and variable stars
-- [ ] Add deep sky objects (Messier catalog subset)
-  - [ ] Andromeda Galaxy (M31)
-  - [ ] Orion Nebula (M42)
-  - [ ] Pleiades (M45)
-  - [ ] Ring Nebula (M57)
+3. **Text-First Rendering** - Current code renders full canvas sky map. Plan requires:
+   - Text overlays as primary
+   - Images only for arrows/icons
+   - Max 1-3 labeled objects visible
 
-### 5.2 Additional Constellations 📋
-- [ ] Add 15+ more constellations
-  - [ ] Draco, Hercules, Lyra
-  - [ ] Pegasus, Perseus, Andromeda
-  - [ ] Sagittarius, Capricornus, Aquarius
-  - [ ] Virgo, Libra, Ophiuchus
-  - [ ] Canis Minor, Lynx, Corona Borealis
+4. **Identify Mode** - Plan calls for "auto-detect nearest bright object, show name only if confident" - NOT IMPLEMENTED
 
-### 5.3 Planet Rendering 📋
-- [ ] Accurate planet position calculations
-  - [ ] Mercury, Venus, Mars, Jupiter, Saturn
-  - [ ] Ephemeris data or simplified orbital elements
-- [ ] Special rendering for planets
-  - [ ] Different icon/size from stars
-  - [ ] Planet symbols or names
-- [ ] Mode integration (Planets view)
+5. **Simplified Container Strategy** - Plan wants:
+   - Main Text (primary info)
+   - Secondary Text (context)
+   - List (event capture)
+   - Optional icon
+   
+   Current has:
+   - Image container (full sky view)
+   - Left menu (finder)
+   - Right menu (filters)
 
-### 5.4 Performance Optimization 📋
-- [ ] Spatial indexing for stars (quadtree/octree)
-- [ ] Visibility culling improvements
-- [ ] Render only visible constellations
-- [ ] Optimize canvas operations
-- [ ] Reduce SDK update frequency when idle
+6. **Performance Optimizations** - Plan specifies:
+   - 5-10 FPS logic (✓ partially done)
+   - Prefer text updates over images
+   - Auto-throttle on low battery
+   - Pause when not wearing
 
-### 5.5 UI Improvements 📋
-- [ ] Add magnitude limit slider/control
-- [ ] Constellation name labels
-- [ ] Star name labels on selection
-- [ ] Coordinates display (RA/Dec or Alt/Az)
-- [ ] Time display (local/sidereal)
-- [ ] Twilight/dark mode detection
-
-### 5.6 Calibration & Accuracy 📋
-- [ ] Compass calibration helper
-- [ ] Magnetic declination correction
-- [ ] Location accuracy indicator
-- [ ] Time synchronization check
+7. **Glanceable UX** - Current renders dense star field. Target is:
+   - < 1 second to read
+   - No dense visuals
+   - Contextual overlays only
 
 ---
 
-## Phase 6: Testing & Quality Assurance 📋
+# Implementation Roadmap
 
-### 6.1 Unit Testing 📋
-- [ ] Calculator function tests
-  - [ ] Julian Date accuracy
-  - [ ] LST calculation verification
-  - [ ] Coordinate transformations
-- [ ] Star catalog integrity
-  - [ ] All HR numbers valid
-  - [ ] Constellation lines reference existing stars
+## Phase 1: Type System Alignment ✅ → 🔄
 
-### 6.2 Integration Testing 📋
-- [ ] End-to-end browser testing
-  - [ ] Location services
-  - [ ] Orientation tracking
-  - [ ] Render loop performance
-- [ ] SDK integration tests
-  - [ ] Container creation
-  - [ ] Image updates
-  - [ ] Event handling
+**Goal**: Align types with new "astronomical compass" architecture
 
-### 6.3 Accuracy Verification 📋
-- [ ] Star position accuracy checks
-  - [ ] Compare against Stellarium/Cartes du Ciel
-  - [ ] Verify at different latitudes
-  - [ ] Verify at different times
-- [ ] Field of view calibration
-  - [ ] Match actual glasses FOV
-
-### 6.4 Device Testing 📋
-- [ ] Even Realities glasses testing
-  - [ ] Display clarity
-  - [ ] Update latency
-  - [ ] Battery impact
-- [ ] Mobile device testing
-  - [ ] iOS Safari
-  - [ ] Android Chrome
-  - [ ] Permission flows
-
----
-
-## Phase 7: Advanced Features 📋
-
-### 7.1 Interactive Features 📋
-- [ ] Star/object selection system
-  - [ ] Head-tracking selection (look to select)
-  - [ ] Tap/gesture selection
-  - [ ] Object details display
-- [ ] Search functionality
-  - [ ] Find star by name
-  - [ ] Find constellation
-  - [ ] Find planet
-
-### 7.2 Time Controls 📋
-- [ ] Time travel feature
-  - [ ] Fast forward/rewind
-  - [ ] Specific date/time input
-  - [ ] Animation playback
-- [ ] Rise/set times
-  - [ ] Show when objects become visible
-
-### 7.3 Data Enhancements 📋
-- [ ] Star information database
-  - [ ] Distance
-  - [ ] Spectral class details
-  - [ ] Historical/cultural info
-- [ ] Satellite tracking (ISS, etc.)
-- [ ] Meteor shower notifications
-
-### 7.4 Settings & Preferences 📋
-- [ ] User preferences
-  - [ ] Magnitude limit
-  - [ ] Constellation lines on/off
-  - [ ] Cardinal markers on/off
-  - [ ] Horizon display on/off
-- [ ] Location presets
-  - [ ] Save favorite locations
-  - [ ] Quick-switch locations
-
----
-
-## Technical Architecture
-
-### File Structure
-```
-src/
-├── main.ts                 # Entry point, lifecycle management
-├── types/
-│   └── index.ts            # TypeScript interfaces
-├── sky/
-│   ├── calculator.ts       # Celestial math
-│   ├── stars.ts            # Star catalog
-│   ├── constellations.ts   # Constellation patterns
-│   └── renderer.ts         # Canvas rendering
-├── ui/
-│   ├── containers.ts       # SDK container definitions
-│   └── layout.ts           # Layout helpers (if needed)
-├── sensors/
-│   └── gyroscope.ts        # Orientation tracking
-└── location/
-    └── geolocation.ts      # GPS services
+### Task 1.1: Add AppMode Enum
+```typescript
+// Add to types/index.ts
+export enum AppMode {
+  Identify = 'identify',       // Auto-detect what's being looked at
+  TargetFinder = 'finder',     // Guide to selected target
+  ConstellationHints = 'hints' // Show constellation outlines only
+}
 ```
 
-### Key Dependencies
-- `@evenrealities/even_hub_sdk` - Glasses communication
-- TypeScript 5.x - Type safety
-- Vite 7.x - Build tool
+**Files to modify**: `src/types/index.ts`
 
-### SDK Constraints
-- Canvas: 576x288 pixels
-- Max 4 containers per page
-- Exactly 1 container with `isEventCapture: 1`
-- Image updates via `updateImageRawData()`
-- Text updates via `textContainerUpgrade()`
-
-### Performance Targets
-- Render loop: 10 FPS (100ms interval)
-- Image update queue: Single concurrent
-- Star rendering: 100-300 stars visible
-- Memory: < 50MB heap usage
-
----
-
-## Development Workflow
-
-### Build Commands
-```bash
-npm run dev      # Development server
-npm run build    # Production build
-npm run preview  # Preview production build
+### Task 1.2: Create FocusTarget Model
+```typescript
+// Add to types/index.ts
+export interface FocusTarget {
+  id: string;
+  name: string;
+  type: 'star' | 'planet' | 'constellation' | 'deepsky';
+  ra: number;
+  dec: number;
+  magnitude?: number;
+  info?: string;
+  // For rendering guidance
+  direction?: {
+    azimuth: number;
+    altitude: number;
+    distance: number;
+  };
+}
 ```
 
-### Testing Checklist (Per Release)
-1. [ ] Browser mode renders correctly
-2. [ ] Keyboard controls work (←↑↓→, R)
-3. [ ] Geolocation acquires position
-4. [ ] SDK connects to glasses
-5. [ ] Mode switching works
-6. [ ] Star positions accurate
-7. [ ] Constellation lines render
-8. [ ] No memory leaks (monitor heap)
+**Files to modify**: `src/types/index.ts`
+
+### Task 1.3: Update AppState Interface
+Replace `ViewMode`-centric state with `AppMode`:
+- Replace `viewMode: ViewMode` with `appMode: AppMode`
+- Replace `finderTarget: SearchableObject | null` with `focusTarget: FocusTarget | null`
+- Remove complex filter enums (simplify to context-driven)
+
+**Files to modify**: `src/types/index.ts`, `src/main.ts`
 
 ---
 
-## Known Issues & Limitations
+## Phase 2: Identify Mode Implementation 🆕
 
-### Current Limitations
-1. **Star catalog limited** - Only ~100 brightest stars
-2. **No planets** - Position calculation not implemented
-3. **Limited constellations** - Only 12 defined
-4. **No DSOs** - No galaxies/nebulae displayed
-5. **Fixed FOV** - 60°×35° assumed, may not match actual glasses
+**Goal**: Implement "Identify what I'm looking at" - the primary compass feature
 
-### SDK Limitations
-- Monochrome display only (grayscale)
-- Limited update rate (~10-15 FPS max)
-- Container constraints (4 max)
-- No direct pixel access (must use image containers)
+### Task 2.1: Create Object Detection Engine
+```typescript
+// src/identify/detector.ts
+export function findNearestObject(
+  orientation: HeadOrientation,
+  location: GeoLocation,
+  candidates: CatalogObject[],
+  options: {
+    fovHorizontal: number;
+    fovVertical: number;
+    minAltitude: number;
+  }
+): IdentifiedObject | null;
+
+export function calculateConfidence(
+  object: CatalogObject,
+  offset: { deltaAz: number; deltaAlt: number }
+): number; // 0-1 confidence score
+```
+
+**New file**: `src/identify/detector.ts`
+
+### Task 2.2: Implement Identify Logic
+- Query visible objects based on head orientation
+- Calculate angular distance to each
+- Return nearest object with confidence score
+- Filter by magnitude (only bright objects)
+
+**Logic**:
+1. Get all stars above horizon with magnitude < 2.5
+2. Calculate angular distance from current view center
+3. Return closest if within FOV, null otherwise
+4. Confidence = 1 - (angular_distance / max_distance)
+
+### Task 2.3: Add Text-Based Info Panel
+Replace dense sky rendering with text overlay:
+```
+┌─────────────────────────┐
+│  ★ SIRIUS              │  <- Primary text (bright, large)
+│  Mag -1.5 · Canis Major │  <- Secondary text (smaller)
+└─────────────────────────┘
+```
+
+**Files to modify**: `src/ui/infoPanel.ts` (new)
 
 ---
 
-## Milestones
+## Phase 3: Text-First Rendering Engine 🆕
 
-| Milestone | Status | Target Date |
-|-----------|--------|-------------|
-| Foundation Complete | ✅ | Done |
-| Basic Star Chart | ✅ | Done |
-| Glasses Integration | ✅ | Done |
-| Extended Catalog | 🚧 | TBD |
-| Planet Support | 📋 | TBD |
-| Production Release | 📋 | TBD |
+**Goal**: Replace canvas sky map with minimal text/icon overlay
+
+### Task 3.1: Create Text Renderer
+```typescript
+// src/rendering/textRenderer.ts
+export interface TextOverlay {
+  primary: string;      // "SIRIUS"
+  secondary?: string;   // "Mag -1.5 · Canis Major"
+  direction?: string;   // "← 15° up" (for off-center targets)
+}
+
+export function renderTextOverlay(
+  ctx: CanvasRenderingContext2D,
+  overlay: TextOverlay,
+  position: 'center' | 'top' | 'bottom'
+): void;
+```
+
+**New file**: `src/rendering/textRenderer.ts`
+
+### Task 3.2: Create Arrow/Icon Renderer
+```typescript
+// src/rendering/iconRenderer.ts
+export function renderDirectionArrow(
+  ctx: CanvasRenderingContext2D,
+  angle: number,        // Direction to target
+  distance: number,     // Angular distance
+  isInView: boolean
+): void;
+
+export function renderConstellationHint(
+  ctx: CanvasRenderingContext2D,
+  constellation: Constellation,
+  orientation: HeadOrientation
+): void; // Minimal dotted lines
+```
+
+**New file**: `src/rendering/iconRenderer.ts`
+
+### Task 3.3: Refactor Main Render Loop
+Replace `renderSkyToBuffer` with mode-aware renderer:
+```typescript
+export function renderCompassView(
+  ctx: CanvasRenderingContext2D,
+  state: {
+    appMode: AppMode;
+    focusTarget: FocusTarget | null;
+    identifiedObject: IdentifiedObject | null;
+    orientation: HeadOrientation;
+    location: GeoLocation;
+  }
+): void {
+  // Clear canvas
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  
+  switch (state.appMode) {
+    case AppMode.Identify:
+      renderIdentifyMode(ctx, state.identifiedObject);
+      break;
+    case AppMode.TargetFinder:
+      renderFinderMode(ctx, state.focusTarget, state.orientation);
+      break;
+    case AppMode.ConstellationHints:
+      renderConstellationMode(ctx, state.orientation, state.location);
+      break;
+  }
+}
+```
+
+**Files to modify**: `src/sky/renderer.ts` (major refactor)
 
 ---
 
-## Resources
+## Phase 4: Simplified Container Architecture 🔄
 
-- **Even Hub SDK**: https://www.npmjs.com/package/@evenrealities/even_hub_sdk
-- **Astronomical Algorithms**: Jean Meeus
-- **Yale Bright Star Catalog**: http://tdc-www.harvard.edu/catalogs/bsc5.html
-- **Stellarium**: Reference for position verification
+**Goal**: Reduce from 3 containers to simpler layout
+
+### Task 4.1: Redesign Container Layout
+**Current**: Image (sky) + Left Menu + Right Menu = 3 containers
+
+**New**: 
+```
+┌─────────────────────────────────────────┐
+│                                         │
+│     [Text Info - Center or Top]        │  <- Text container
+│                                         │
+│         [Arrow/Icon if needed]         │  <- Part of text or minimal image
+│                                         │
+└─────────────────────────────────────────┘
+│  [Mode: Identify ▼]                     │  <- Single list container
+└─────────────────────────────────────────┘
+```
+
+**Files to modify**: `src/ui/containers.ts`
+
+### Task 4.2: Simplify Menu System
+Replace dual-menu with single mode selector:
+- Menu items: `["Identify", "Find Target", "Constellations"]`
+- Click to cycle modes
+- No submenus in initial version
+
+**Files to modify**: 
+- `src/ui/menu.ts` (simplify)
+- `src/ui/searchMenu.ts` (deprecate or simplify)
+
+### Task 4.3: Implement Text Container Upgrades
+Use SDK's `textContainerUpgrade` for updates instead of image streaming:
+```typescript
+await bridge.textContainerUpgrade({
+  containerID: CONTAINER_IDS.INFO,
+  content: identifiedObject 
+    ? `${identifiedObject.name}\nMag ${identifiedObject.magnitude}`
+    : "Looking..."
+});
+```
+
+**Files to modify**: `src/main.ts`, `src/ui/containers.ts`
 
 ---
 
-*Last Updated: 2026-02-13*
+## Phase 5: Target Finder Refinement 🔄
+
+**Goal**: Improve existing finder with simpler UX
+
+### Task 5.1: Simplify Target Selection
+Instead of hierarchical menu:
+1. Mode: Find Target
+2. Click to show list of brightest objects (top 20)
+3. Click object to select
+4. Arrow guides to target
+
+### Task 5.2: Enhance Arrow Guidance
+Current has basic arrow. Enhance with:
+- Distance readout ("23° away")
+- Simple direction text ("Look up and left")
+- Green crosshair when target in view
+
+**Files to modify**: `src/sky/renderer.ts` (refactor arrow rendering)
+
+---
+
+## Phase 6: Constellation Hints Mode 🆕
+
+**Goal**: Minimal constellation overlay
+
+### Task 6.1: Contextual Constellation Display
+- Only show constellation currently being faced
+- 3-5 dotted lines max
+- Auto-fade when looking away
+- Show constellation name only
+
+**Files to modify**: `src/sky/constellations.ts` (add visibility check)
+
+---
+
+## Phase 7: Performance & Polish 🔄
+
+### Task 7.1: Implement Throttling
+- Render loop: 5 FPS max for images
+- Text updates: immediate via SDK
+- Image updates: only when necessary
+
+### Task 7.2: Battery Awareness
+```typescript
+// Monitor battery and reduce update rate
+if (batteryLevel < 20) {
+  RENDER_INTERVAL = 500; // 2 FPS
+}
+```
+
+### Task 7.3: Pause When Not Wearing
+Use device status to pause updates when glasses not worn.
+
+**Files to modify**: `src/main.ts`, `src/sensors/gyroscope.ts`
+
+---
+
+## Phase 8: Cleanup & Deprecation 🧹
+
+### Task 8.1: Remove Deprecated Code
+- [ ] Remove `ViewMode` enum (after migration)
+- [ ] Remove complex filter enums (if not needed)
+- [ ] Remove dual-menu system
+- [ ] Remove dense star rendering code (or move to debug mode)
+- [ ] Remove deep sky object rendering (optional for v1)
+
+### Task 8.2: Consolidate Types
+- Merge `SearchableObject` into `FocusTarget`
+- Remove unused type definitions
+- Clean up `types/search.ts`
+
+---
+
+# Task Priority Queue
+
+## Week 1: Foundation
+1. ✅ **Task 1.1**: Add AppMode enum
+2. ✅ **Task 1.2**: Create FocusTarget model  
+3. ✅ **Task 1.3**: Update AppState
+4. 🔄 **Task 4.2**: Simplify menu to single selector
+
+## Week 2: Identify Mode
+5. 🆕 **Task 2.1**: Create object detection engine
+6. 🆕 **Task 2.2**: Implement identify logic
+7. 🆕 **Task 2.3**: Add text info panel
+
+## Week 3: Rendering Refactor
+8. 🆕 **Task 3.1**: Create text renderer
+9. 🆕 **Task 3.2**: Create icon renderer
+10. 🔄 **Task 3.3**: Refactor main render loop
+
+## Week 4: Polish
+11. 🔄 **Task 5.2**: Enhance arrow guidance
+12. 🆕 **Task 6.1**: Constellation hints mode
+13. 🔄 **Task 7.1**: Implement throttling
+
+## Week 5: Finalize
+14. 🔄 **Task 4.1**: Final container layout
+15. 🔄 **Task 4.3**: Text container upgrades
+16. 🧹 **Task 8.1**: Remove deprecated code
+
+---
+
+# Testing Checklist
+
+- [ ] Identify mode shows nearest bright star within 2 seconds
+- [ ] Target finder arrow points correctly (verify with known objects)
+- [ ] Constellation mode only shows relevant constellation
+- [ ] Text is readable on actual glasses display
+- [ ] Menu navigation works with single click
+- [ ] Battery lasts > 2 hours of continuous use
+- [ ] App pauses when glasses are removed
+
+---
+
+# Migration Notes
+
+## Preserving Current Code
+The current sky chart implementation is valuable for:
+- Browser debugging/companion view
+- Future "detailed view" mode
+- Desktop simulation
+
+**Recommendation**: Keep `renderer.ts` as `detailedRenderer.ts` for debug builds.
+
+## SDK Compatibility
+Current SDK usage patterns remain valid:
+- `waitForEvenAppBridge()` - keep
+- `createStartUpPageContainer()` - keep
+- `rebuildPageContainer()` - keep
+- `updateImageRawData()` - minimize usage
+- `textContainerUpgrade()` - use more frequently
+
+---
+
+# Success Criteria
+
+1. **Glanceability**: User can identify what they're looking at in < 1 second
+2. **Simplicity**: No more than 3 interactive elements
+3. **Performance**: 5+ hour battery life with typical use
+4. **Accuracy**: Object identification accurate to within 5 degrees
+5. **Reliability**: Works without internet, only needs GPS + gyro
+
+---
+
+*Last Updated: 2026-02-14*  
+*Status: Ready for implementation*

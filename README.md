@@ -1,91 +1,159 @@
-# Even Stars 🌟
 
-A real-time sky chart application for Even Realities smart glasses. Displays stars and constellations based on your location and head orientation.
+Arrows guide your head movement until the object is centered.
 
-## Features
+---
 
-- 🌌 Real-time star map based on GPS location
-- 📱 Gyroscope/head tracking for immersive experience
-- ⭐ 100+ brightest stars from Yale Bright Star Catalog
-- 🔭 Major constellations with connecting lines
-- 🎮 Browser simulation mode (keyboard controls)
-- 👓 Native Even Realities glasses integration
+## 🌌 Constellation Hints
 
-## Quick Start
+- Major constellations only  
+- Soft dotted lines  
+- Only visible when facing them  
+- Auto-fade when not relevant  
+
+---
+
+## 🌙 Future Extensions
+
+- Moon phase & direction  
+- Planet visibility  
+- ISS pass alerts  
+- Deep-sky object pointers  
+
+---
+
+# 🎮 Input Model
+
+## Gyroscope (Primary Input)
+
+Used for:
+
+- Sky orientation  
+- Object detection  
+- Automatic context switching  
+
+User mostly interacts by looking.
+
+---
+
+## Smart Ring (Secondary Input)
+
+Minimal actions:
+
+### Click
+- Cycle modes  
+  - Identify  
+  - Find Target  
+  - Constellations  
+
+### Double Click
+- Select / confirm target  
+
+### Up / Down
+- Scroll target list  
+- Adjust label density  
+
+---
+
+# 🖥️ Display Constraints
+
+Optimized for:
+
+- ~500×200 resolution  
+- Monochrome green LED  
+- Transparent waveguide optics  
+- Low bandwidth streaming  
+
+---
+
+# 🧮 Technical Details
+
+## Update Rate
+- 5–10 FPS (power & bandwidth efficient)
+
+---
+
+## Coordinate Systems
+
+- RA/Dec → Alt/Az conversion  
+- Local Sidereal Time  
+- FOV clipping  
+- Minimal projection math  
+
+---
+
+## Object Filtering
+
+Only render objects that are:
+
+- Above horizon  
+- Within FOV  
+- Brighter than threshold  
+- Contextually relevant  
+
+---
+
+# 🏗️ Architecture
+
+src/
+├── main.ts
+├── sky/
+│ ├── calculator.ts
+│ ├── stars.ts
+│ ├── constellations.ts
+│ └── visibility.ts
+├── sensors/
+│ ├── gyroscope.ts
+│ └── orientation.ts
+├── interaction/
+│ └── ring.ts
+├── rendering/
+│ └── minimalist.ts
+└── location/
+└── geolocation.ts
+
+
+---
+
+# 👓 Even SDK Integration
+
+Uses `@evenrealities/even_hub_sdk` for:
+
+- Container management  
+- Image streaming  
+- Ring input events  
+- Device state monitoring  
+
+---
+
+# 🚀 Quick Start
 
 ```bash
-# Install dependencies
 npm install
-
-# Run development server
 npm run dev
-
-# Build for production
 npm run build
 ```
 
-## Controls
+# 🗺️ Roadmap
+## V1
 
-### Browser Mode (Keyboard)
-- **Arrow Keys**: Look around (change azimuth/altitude)
-- **R**: Reset view to default
+Bright star identification
 
-### Glasses Mode
-- **Head Movement**: Look around naturally
-- **Menu Selection**: Use glasses controls to switch modes
+Target finder
 
-## Modes
+Minimal constellation hints
 
-1. **Stars**: Display brightest stars with magnitude-based sizing
-2. **Constellations**: Show constellation lines connecting stars
-3. **Planets**: Future support for planets (currently shows stars)
+## V2
 
-## Technical Details
+Planets
 
-### Display
-- Canvas: 576x288 pixels (Even glasses display)
-- FOV: 60° horizontal × 35° vertical
-- Update rate: 10 FPS (optimized for glasses bandwidth)
+Moon tracking
 
-### Coordinate Systems
-- **Celestial**: Right Ascension / Declination
-- **Horizontal**: Altitude / Azimuth
-- **Canvas**: X/Y pixels (0,0 at top-left)
+Smart filtering
 
-### Sky Calculations
-- Local Sidereal Time (LST) calculation
-- RA/Dec to Alt/Az conversion
-- Field of view clipping
-- Perspective projection to canvas
+## V3
 
-## Architecture
+Event-based alerts
 
-```
-src/
-├── main.ts              # Entry point & bridge init
-├── sky/
-│   ├── calculator.ts    # Celestial coordinate math
-│   ├── stars.ts         # Star catalog (~100 stars)
-│   ├── constellations.ts # Constellation patterns
-│   └── renderer.ts      # Canvas rendering
-├── ui/
-│   └── containers.ts    # Even glasses UI config
-├── sensors/
-│   └── gyroscope.ts     # Head tracking + keyboard sim
-├── location/
-│   └── geolocation.ts   # GPS handling
-└── types/
-    └── index.ts         # TypeScript interfaces
-```
+Personal observing lists
 
-## SDK Integration
-
-Uses `@evenrealities/even_hub_sdk` for:
-- Container management (4 max: sky, info, mode selector, status)
-- Image data streaming to glasses
-- Event handling (menu selections)
-- Device status monitoring
-
-## License
-
-MIT
+Adaptive brightness
