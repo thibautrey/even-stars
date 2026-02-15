@@ -1,4 +1,5 @@
 // Sky chart renderer - draws stars and constellations on the glasses display
+// Uses gnomonic (tangent-plane) projection for accurate star placement
 
 import type { 
   Star, 
@@ -13,10 +14,9 @@ import type { SearchableObject, DirectionIndicator } from '../types/search';
 import { 
   getStarHorizontalCoords, 
   isAboveHorizon, 
-  getViewOffset, 
-  isInFieldOfView,
-  projectToCanvas,
-  normalizeDegrees
+  gnomonicProject,
+  normalizeDegrees,
+  type ProjectionResult,
 } from './calculator';
 import { BRIGHT_STARS, getStarByHR } from './stars';
 import { CONSTELLATIONS } from './constellations';
@@ -25,38 +25,66 @@ import { getAllPlanets, getInnerPlanets, getOuterPlanets, getVisiblePlanets, typ
 // Glasses display dimensions (must match container size)
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../ui/containers';
 
-// Default field of view (typical for AR glasses)
+// ────────────────────────────────────────────────────────────────────────────
+// Display spec: Even Realities G1
+//   Physical display: 640×200 px, Micro-LED, 20 Hz
+//   Field of view:    25° horizontal
+//   Vertical FOV:     25° × (200/640) ≈ 7.8125°
+//   SDK canvas:       576×288 (the SDK coordinate space we render into)
+//
+// The SDK canvas (576×288) is stretched to the physical display (640×200).
+// We project the sky onto the SDK canvas; the FOV values map angular degrees
+// to SDK pixels.  The gnomonic projection handles the non-linear mapping.
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Accurate FOV matching the Even Realities G1 glasses */
 const DEFAULT_FOV: FieldOfView = {
-  horizontal: 60,  // 60 degrees horizontal
-  vertical: 35,    // 35 degrees vertical
+  horizontal: 25,                  // 25° horizontal FOV (from spec)
+  vertical: 25 * (200 / 640),     // ≈ 7.8125° vertical, proportional to physical pixel ratio
 };
 
-/**
- * Calculate star size based on magnitude
- * @param magnitude Star magnitude
- * @returns Size in pixels
- */
-function getStarSize(magnitude: number): number {
-  // Brighter stars (lower magnitude) are larger
-  if (magnitude < 0) return 5;
-  if (magnitude < 1) return 4;
-  if (magnitude < 2) return 3;
-  if (magnitude < 3) return 2.5;
-  return 2;
-}
+// ────────────────────────────────────────────────────────────────────────────
+// Star appearance helpers
+// ────────────────────────────────────────────────────────────────────────────
 
 /**
- * Convert magnitude to opacity (brighter = more opaque)
- * @param magnitude Star magnitude
- * @returns Opacity value (0-1)
+ * Calculate star display radius based on magnitude.
+ * Tuned for the small 576×288 canvas — at 25° FOV each pixel subtends
+ * ~2.6 arcminutes, so even a 1-pixel dot is visible.
  */
+function getStarSize(magnitude: number): number {
+  if (magnitude < -1) return 4.5;
+  if (magnitude <  0) return 4;
+  if (magnitude <  1) return 3.5;
+  if (magnitude <  2) return 2.5;
+  if (magnitude <  3) return 2;
+  return 1.5;
+}
+
+/** Opacity for star dot */
 function getStarOpacity(magnitude: number): number {
   if (magnitude < 0) return 1;
   if (magnitude < 1) return 0.95;
   if (magnitude < 2) return 0.85;
-  if (magnitude < 3) return 0.75;
-  return 0.6;
+  if (magnitude < 3) return 0.7;
+  return 0.55;
 }
+
+/**
+ * Project a sky object and return pixel position or null if not visible
+ */
+function projectObject(
+  coords: HorizontalCoords,
+  orientation: HeadOrientation,
+  fov: FieldOfView,
+): ProjectionResult | null {
+  const proj = gnomonicProject(coords, orientation, fov, CANVAS_WIDTH, CANVAS_HEIGHT);
+  return proj.visible ? proj : null;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Core render helpers (all use gnomonic projection)
+// ────────────────────────────────────────────────────────────────────────────
 
 /**
  * Render a planet on the canvas
@@ -66,34 +94,20 @@ function renderPlanet(
   planet: Planet,
   coords: HorizontalCoords,
   orientation: HeadOrientation,
-  fov: FieldOfView
+  fov: FieldOfView,
 ): boolean {
-  const offset = getViewOffset(coords, orientation.azimuth, orientation.pitch);
-  
-  // Check if planet is in field of view
-  if (!isInFieldOfView(offset.deltaAz, offset.deltaAlt, fov.horizontal, fov.vertical)) {
-    return false;
-  }
-  
-  const pos = projectToCanvas(
-    offset.deltaAz,
-    offset.deltaAlt,
-    CANVAS_WIDTH,
-    CANVAS_HEIGHT,
-    fov.horizontal,
-    fov.vertical
-  );
-  
-  // Planets are larger than stars and have a different symbol
-  const size = planet.isInner ? 4 : 5;
-  
-  // Draw planet as a circle with a ring for outer planets
+  const pos = projectObject(coords, orientation, fov);
+  if (!pos) return false;
+
+  const size = planet.isInner ? 3.5 : 4.5;
+
+  // Filled disc
   ctx.beginPath();
   ctx.arc(pos.x, pos.y, size, 0, Math.PI * 2);
   ctx.fillStyle = 'rgba(255, 255, 200, 0.9)';
   ctx.fill();
-  
-  // Draw ring for gas giants
+
+  // Ring for gas giants
   if (!planet.isInner && planet.name !== 'Mars') {
     ctx.beginPath();
     ctx.ellipse(pos.x, pos.y, size + 2, size * 0.5, Math.PI / 4, 0, Math.PI * 2);
@@ -101,14 +115,14 @@ function renderPlanet(
     ctx.lineWidth = 1;
     ctx.stroke();
   }
-  
-  // Draw planet symbol
+
+  // Symbol above
   ctx.font = '10px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
   ctx.fillText(planet.symbol, pos.x, pos.y - size - 6);
-  
+
   return true;
 }
 
@@ -120,38 +134,24 @@ function renderStar(
   star: Star,
   coords: HorizontalCoords,
   orientation: HeadOrientation,
-  fov: FieldOfView
+  fov: FieldOfView,
 ): boolean {
-  const offset = getViewOffset(coords, orientation.azimuth, orientation.pitch);
-  
-  // Check if star is in field of view
-  if (!isInFieldOfView(offset.deltaAz, offset.deltaAlt, fov.horizontal, fov.vertical)) {
-    return false;
-  }
-  
-  const pos = projectToCanvas(
-    offset.deltaAz,
-    offset.deltaAlt,
-    CANVAS_WIDTH,
-    CANVAS_HEIGHT,
-    fov.horizontal,
-    fov.vertical
-  );
-  
-  const size = getStarSize(star.magnitude);
+  const pos = projectObject(coords, orientation, fov);
+  if (!pos) return false;
+
+  const radius = getStarSize(star.magnitude) * 0.5;
   const opacity = getStarOpacity(star.magnitude);
-  
-  // Draw star (WHITE on BLACK background)
+
   ctx.beginPath();
-  ctx.arc(pos.x, pos.y, Math.max(1, size * 0.5), 0, Math.PI * 2);
+  ctx.arc(pos.x, pos.y, Math.max(0.8, radius), 0, Math.PI * 2);
   ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
   ctx.fill();
-  
+
   return true;
 }
 
 /**
- * Render a constellation
+ * Render a constellation (lines between stars)
  */
 function renderConstellation(
   ctx: CanvasRenderingContext2D,
@@ -159,53 +159,28 @@ function renderConstellation(
   location: GeoLocation,
   orientation: HeadOrientation,
   fov: FieldOfView,
-  date: Date
+  date: Date,
 ): void {
   const starPositions = new Map<number, { x: number; y: number; visible: boolean }>();
-  
-  // Calculate positions for all stars in the constellation
+
   for (const hr of constellation.stars) {
     const star = getStarByHR(hr);
     if (!star) continue;
-    
+
     const coords = getStarHorizontalCoords(star, location, date);
-    const offset = getViewOffset(coords, orientation.azimuth, orientation.pitch);
-    
-    if (isInFieldOfView(offset.deltaAz, offset.deltaAlt, fov.horizontal, fov.vertical)) {
-      const pos = projectToCanvas(
-        offset.deltaAz,
-        offset.deltaAlt,
-        CANVAS_WIDTH,
-        CANVAS_HEIGHT,
-        fov.horizontal,
-        fov.vertical
-      );
-      starPositions.set(hr, { x: pos.x, y: pos.y, visible: true });
-    } else {
-      // Store invisible positions for lines that go off-screen
-      const pos = projectToCanvas(
-        offset.deltaAz,
-        offset.deltaAlt,
-        CANVAS_WIDTH,
-        CANVAS_HEIGHT,
-        fov.horizontal,
-        fov.vertical
-      );
-      starPositions.set(hr, { x: pos.x, y: pos.y, visible: false });
-    }
+    const proj = gnomonicProject(coords, orientation, fov, CANVAS_WIDTH, CANVAS_HEIGHT);
+    starPositions.set(hr, { x: proj.x, y: proj.y, visible: proj.visible });
   }
-  
-  // Draw constellation lines
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
   ctx.lineWidth = 1;
-  
+
   for (const [startIdx, endIdx] of constellation.lines) {
     const startHR = constellation.stars[startIdx];
-    const endHR = constellation.stars[endIdx];
-    
-    const start = starPositions.get(startHR);
-    const end = starPositions.get(endHR);
-    
+    const endHR   = constellation.stars[endIdx];
+    const start   = starPositions.get(startHR);
+    const end     = starPositions.get(endHR);
+
     if (start && end && (start.visible || end.visible)) {
       ctx.beginPath();
       ctx.moveTo(start.x, start.y);
@@ -216,75 +191,78 @@ function renderConstellation(
 }
 
 /**
- * Render cardinal direction markers
+ * Render cardinal direction markers at the bottom of the view.
+ * Each cardinal direction is projected at its true azimuth.
  */
 function renderCardinalMarkers(
   ctx: CanvasRenderingContext2D,
   orientation: HeadOrientation,
-  fov: FieldOfView
+  fov: FieldOfView,
 ): void {
   const directions = [
     { label: 'N', az: 0 },
+    { label: 'NE', az: 45 },
     { label: 'E', az: 90 },
+    { label: 'SE', az: 135 },
     { label: 'S', az: 180 },
+    { label: 'SW', az: 225 },
     { label: 'W', az: 270 },
+    { label: 'NW', az: 315 },
   ];
-  
+
   ctx.font = '10px sans-serif';
   ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  
+  ctx.textBaseline = 'bottom';
+
   for (const dir of directions) {
-    const deltaAz = normalizeDegrees(dir.az - orientation.azimuth);
-    let adjustedDelta = deltaAz;
-    if (adjustedDelta > 180) adjustedDelta -= 360;
-    
-    if (Math.abs(adjustedDelta) <= fov.horizontal / 2 + 10) {
-      const pos = projectToCanvas(
-        adjustedDelta,
-        -fov.vertical / 2 + 5,
-        CANVAS_WIDTH,
-        CANVAS_HEIGHT,
-        fov.horizontal,
-        fov.vertical
-      );
-      
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.fillText(dir.label, pos.x, pos.y);
+    // Project at the same altitude as view centre minus half vertical FOV
+    const altForLabel = orientation.pitch - fov.vertical / 2 + 1;
+    const cardCoords: HorizontalCoords = { azimuth: dir.az, altitude: altForLabel };
+    const proj = gnomonicProject(cardCoords, orientation, fov, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    if (proj.visible && proj.x >= -10 && proj.x <= CANVAS_WIDTH + 10) {
+      ctx.fillStyle = dir.label.length === 1
+        ? 'rgba(255, 255, 255, 0.9)'
+        : 'rgba(255, 255, 255, 0.55)';
+      ctx.fillText(dir.label, proj.x, CANVAS_HEIGHT - 2);
     }
   }
 }
 
 /**
- * Render horizon line
+ * Render horizon line.
+ * Samples many azimuth points along the 0° altitude circle
+ * and connects them via gnomonic projection.
  */
 function renderHorizon(
   ctx: CanvasRenderingContext2D,
   orientation: HeadOrientation,
-  fov: FieldOfView
+  fov: FieldOfView,
 ): void {
-  // Calculate where horizon would be based on pitch
-  const horizonOffset = -orientation.pitch;
-  
-  if (Math.abs(horizonOffset) <= fov.vertical / 2) {
-    const pos = projectToCanvas(
-      0,
-      horizonOffset,
-      CANVAS_WIDTH,
-      CANVAS_HEIGHT,
-      fov.horizontal,
-      fov.vertical
-    );
-    
-    ctx.strokeStyle = 'rgba(100, 100, 100, 0.3)';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([5, 5]);
-    ctx.beginPath();
-    ctx.moveTo(0, pos.y);
-    ctx.lineTo(CANVAS_WIDTH, pos.y);
-    ctx.stroke();
-    ctx.setLineDash([]);
+  const STEPS = 60;
+  const points: { x: number; y: number }[] = [];
+
+  for (let i = 0; i <= STEPS; i++) {
+    const az = (orientation.azimuth - fov.horizontal) + (2 * fov.horizontal * i) / STEPS;
+    const coords: HorizontalCoords = { azimuth: normalizeDegrees(az), altitude: 0 };
+    const proj = gnomonicProject(coords, orientation, fov, CANVAS_WIDTH, CANVAS_HEIGHT);
+    if (proj.visible) {
+      points.push({ x: proj.x, y: proj.y });
+    }
   }
+
+  if (points.length < 2) return;
+
+  ctx.strokeStyle = 'rgba(100, 100, 100, 0.3)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([5, 5]);
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) {
+    ctx.lineTo(points[i].x, points[i].y);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
 }
 
 /**
@@ -411,23 +389,10 @@ function renderDeepSkyObject(
   dso: DeepSkyObject,
   coords: HorizontalCoords,
   orientation: HeadOrientation,
-  fov: FieldOfView
+  fov: FieldOfView,
 ): boolean {
-  const offset = getViewOffset(coords, orientation.azimuth, orientation.pitch);
-  
-  // Check if object is in field of view
-  if (!isInFieldOfView(offset.deltaAz, offset.deltaAlt, fov.horizontal, fov.vertical)) {
-    return false;
-  }
-  
-  const pos = projectToCanvas(
-    offset.deltaAz,
-    offset.deltaAlt,
-    CANVAS_WIDTH,
-    CANVAS_HEIGHT,
-    fov.horizontal,
-    fov.vertical
-  );
+  const pos = projectObject(coords, orientation, fov);
+  if (!pos) return false;
   
   // Render based on object type
   const size = Math.max(3, Math.min(8, (dso.size || 10) / 10));
@@ -643,23 +608,14 @@ export function renderSkyToBuffer(options: SkyRenderOptions): {
   // Highlight selected star
   if (selectedStar) {
     const coords = getStarHorizontalCoords(selectedStar, location, date);
-    const offset = getViewOffset(coords, orientation.azimuth, orientation.pitch);
+    const proj = projectObject(coords, orientation, fov);
     
-    if (isInFieldOfView(offset.deltaAz, offset.deltaAlt, fov.horizontal, fov.vertical)) {
-      const pos = projectToCanvas(
-        offset.deltaAz,
-        offset.deltaAlt,
-        CANVAS_WIDTH,
-        CANVAS_HEIGHT,
-        fov.horizontal,
-        fov.vertical
-      );
-      
+    if (proj) {
       // Draw selection ring
       ctx.strokeStyle = 'rgba(255, 200, 50, 0.8)';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(pos.x, pos.y, 8, 0, Math.PI * 2);
+      ctx.arc(proj.x, proj.y, 8, 0, Math.PI * 2);
       ctx.stroke();
     }
   }
@@ -716,7 +672,6 @@ function renderStarLabels(
   fov: FieldOfView,
   date: Date
 ): void {
-  // Collect visible named stars with their positions and priority (brightness)
   const labelCandidates: Array<{
     star: Star;
     x: number;
@@ -725,36 +680,19 @@ function renderStarLabels(
   }> = [];
   
   for (const star of BRIGHT_STARS) {
-    // Only show names for stars with common names and brighter than magnitude 3
     if (!star.name || star.magnitude > 3.0) continue;
     
     const coords = getStarHorizontalCoords(star, location, date);
-    
-    // Skip stars below horizon
     if (!isAboveHorizon(coords.altitude, -5)) continue;
     
-    const offset = getViewOffset(coords, orientation.azimuth, orientation.pitch);
+    const pos = projectObject(coords, orientation, fov);
+    if (!pos) continue;
     
-    // Check if star is in field of view
-    if (!isInFieldOfView(offset.deltaAz, offset.deltaAlt, fov.horizontal, fov.vertical)) {
-      continue;
-    }
-    
-    const pos = projectToCanvas(
-      offset.deltaAz,
-      offset.deltaAlt,
-      CANVAS_WIDTH,
-      CANVAS_HEIGHT,
-      fov.horizontal,
-      fov.vertical
-    );
-    
-    // Priority: brighter stars first (lower magnitude = higher priority)
     labelCandidates.push({
       star,
       x: pos.x,
       y: pos.y,
-      priority: 10 - star.magnitude, // Sirius (-1.46) => ~11.5, mag 3 => 7
+      priority: 10 - star.magnitude,
     });
   }
   
@@ -763,7 +701,7 @@ function renderStarLabels(
   
   // Place labels with collision detection
   const placedLabels: Array<{ x: number; y: number; width: number; height: number }> = [];
-  const MAX_LABELS = 12; // Limit number of labels to avoid clutter
+  const MAX_LABELS = 8; // Tighter for narrow 25° FOV
   
   ctx.font = '9px sans-serif';
   ctx.textBaseline = 'middle';
@@ -879,16 +817,15 @@ function renderIdentifyOverlay(
     const coords = getStarHorizontalCoords(star, location, date);
     if (!isAboveHorizon(coords.altitude, -2)) continue;
 
-    const offset = getViewOffset(coords, orientation.azimuth, orientation.pitch);
-    if (!isInFieldOfView(offset.deltaAz, offset.deltaAlt, fov.horizontal, fov.vertical)) continue;
+    const pos = projectObject(coords, orientation, fov);
+    if (!pos) continue;
 
-    const pos = projectToCanvas(offset.deltaAz, offset.deltaAlt, CANVAS_WIDTH, CANVAS_HEIGHT, fov.horizontal, fov.vertical);
     candidates.push({
       name: star.name,
       type: 'star',
       x: pos.x,
       y: pos.y,
-      priority: 10 - star.magnitude, // Sirius (-1.46) => ~11.5
+      priority: 10 - star.magnitude,
       magnitude: star.magnitude,
     });
   }
@@ -897,37 +834,35 @@ function renderIdentifyOverlay(
   for (const planetData of getAllPlanets(location, date)) {
     if (!planetData.coords || !isAboveHorizon(planetData.coords.altitude, -2)) continue;
 
-    const offset = getViewOffset(planetData.coords, orientation.azimuth, orientation.pitch);
-    if (!isInFieldOfView(offset.deltaAz, offset.deltaAlt, fov.horizontal, fov.vertical)) continue;
+    const pos = projectObject(planetData.coords, orientation, fov);
+    if (!pos) continue;
 
-    const pos = projectToCanvas(offset.deltaAz, offset.deltaAlt, CANVAS_WIDTH, CANVAS_HEIGHT, fov.horizontal, fov.vertical);
     candidates.push({
       name: planetData.planet.name,
       type: 'planet',
       x: pos.x,
       y: pos.y,
-      priority: 12 - planetData.planet.baseMagnitude, // Planets are usually very bright
+      priority: 12 - planetData.planet.baseMagnitude,
       magnitude: planetData.planet.baseMagnitude,
     });
   }
 
   // --- Collect bright deep sky objects ---
   for (const dso of DEEP_SKY_OBJECTS) {
-    if (dso.magnitude > 5.5) continue; // Only prominently visible DSOs
+    if (dso.magnitude > 5.5) continue;
 
     const coords = getDSOHorizontalCoords(dso, location, date);
     if (!isAboveHorizon(coords.altitude, -2)) continue;
 
-    const offset = getViewOffset(coords, orientation.azimuth, orientation.pitch);
-    if (!isInFieldOfView(offset.deltaAz, offset.deltaAlt, fov.horizontal, fov.vertical)) continue;
+    const pos = projectObject(coords, orientation, fov);
+    if (!pos) continue;
 
-    const pos = projectToCanvas(offset.deltaAz, offset.deltaAlt, CANVAS_WIDTH, CANVAS_HEIGHT, fov.horizontal, fov.vertical);
     candidates.push({
       name: dso.name,
       type: dso.type,
       x: pos.x,
       y: pos.y,
-      priority: 8 - dso.magnitude, // DSOs are dimmer, lower priority
+      priority: 8 - dso.magnitude,
       magnitude: dso.magnitude,
     });
   }
@@ -936,7 +871,7 @@ function renderIdentifyOverlay(
   candidates.sort((a, b) => b.priority - a.priority);
 
   // --- Place labels with collision avoidance ---
-  const MAX_LABELS = 8;
+  const MAX_LABELS = 6;  // Fewer labels for narrow 25° FOV
   const FONT_SIZE = 11;
   const LINE_HEIGHT = FONT_SIZE + 2;
   const LABEL_PADDING_H = 4; // horizontal padding inside pill
@@ -1096,35 +1031,34 @@ function calculateDirectionToTarget(
   fov: FieldOfView,
   date: Date
 ): DirectionIndicator {
-  // Get target's horizontal coordinates
+  // Get target's horizontal coordinates (with precession + refraction)
   const targetCoords = getStarHorizontalCoords(
     { hr: 0, name: target.name, ra: target.ra, dec: target.dec, magnitude: target.magnitude },
     location,
     date
   );
-  
-  // Calculate offset from current view center
-  const deltaAz = normalizeDegrees(targetCoords.azimuth - orientation.azimuth);
-  const deltaAlt = targetCoords.altitude - orientation.pitch;
-  
-  // Normalize deltaAz to -180 to 180 range
-  let adjustedDeltaAz = deltaAz;
-  if (adjustedDeltaAz > 180) adjustedDeltaAz -= 360;
-  if (adjustedDeltaAz < -180) adjustedDeltaAz += 360;
-  
-  // Calculate angle (0 = up/north, 90 = right/east, etc.)
-  // In sky coords: azimuth increases eastward, altitude increases upward
-  // Arrow should point FROM center TO target
-  const angle = Math.atan2(adjustedDeltaAz, deltaAlt) * (180 / Math.PI);
-  
-  // Calculate distance in degrees
-  const distance = Math.sqrt(adjustedDeltaAz * adjustedDeltaAz + deltaAlt * deltaAlt);
-  
-  // Check if target is in field of view
-  const isInView = Math.abs(adjustedDeltaAz) <= fov.horizontal / 2 && 
-                   Math.abs(deltaAlt) <= fov.vertical / 2 &&
-                   targetCoords.altitude > 0;
-  
+
+  // Use gnomonic projection to check if in view
+  const proj = gnomonicProject(targetCoords, orientation, fov, CANVAS_WIDTH, CANVAS_HEIGHT);
+  const isInView = proj.visible && targetCoords.altitude > -1;
+
+  // For direction arrow, compute angular offsets on the sphere
+  const deg2rad = Math.PI / 180;
+  const az0 = orientation.azimuth * deg2rad;
+  const alt0 = orientation.pitch * deg2rad;
+  const az = targetCoords.azimuth * deg2rad;
+  const alt = targetCoords.altitude * deg2rad;
+
+  // Great-circle angular distance
+  const cosC = Math.sin(alt0) * Math.sin(alt) + Math.cos(alt0) * Math.cos(alt) * Math.cos(az - az0);
+  const distance = Math.acos(Math.max(-1, Math.min(1, cosC))) / deg2rad;
+
+  // Bearing from view centre to target (position angle on the sphere)
+  const dAz = az - az0;
+  const angle = Math.atan2(Math.sin(dAz) * Math.cos(alt),
+    Math.cos(alt0) * Math.sin(alt) - Math.sin(alt0) * Math.cos(alt) * Math.cos(dAz)
+  ) / deg2rad;
+
   // Generate guidance text
   let guidance = '';
   if (isInView) {
@@ -1132,18 +1066,12 @@ function calculateDirectionToTarget(
   } else if (distance > 90) {
     guidance = 'Behind you';
   } else {
-    // Cardinal direction guidance
     const directions = ['up', 'up-right', 'right', 'down-right', 'down', 'down-left', 'left', 'up-left'];
-    const dirIndex = Math.round((angle + 180) / 45) % 8;
+    const dirIndex = Math.round(((angle % 360 + 360) % 360) / 45) % 8;
     guidance = `Go ${directions[dirIndex]}`;
   }
-  
-  return {
-    angle,
-    distance,
-    isInView,
-    guidance,
-  };
+
+  return { angle, distance, isInView, guidance };
 }
 
 /**
@@ -1170,16 +1098,12 @@ function renderFinderArrow(
       location,
       date
     );
-    
-    const offset = getViewOffset(targetCoords, orientation.azimuth, orientation.pitch);
-    const pos = projectToCanvas(
-      offset.deltaAz,
-      offset.deltaAlt,
-      CANVAS_WIDTH,
-      CANVAS_HEIGHT,
-      fov.horizontal,
-      fov.vertical
-    );
+
+    const proj = gnomonicProject(targetCoords, orientation, fov, CANVAS_WIDTH, CANVAS_HEIGHT);
+    if (!proj.visible) return; // safety
+
+    const px = proj.x;
+    const py = proj.y;
     
     // Draw target crosshair
     ctx.strokeStyle = 'rgba(50, 255, 50, 0.9)';
@@ -1188,22 +1112,22 @@ function renderFinderArrow(
     
     // Crosshair
     ctx.beginPath();
-    ctx.moveTo(pos.x - size, pos.y);
-    ctx.lineTo(pos.x + size, pos.y);
-    ctx.moveTo(pos.x, pos.y - size);
-    ctx.lineTo(pos.x, pos.y + size);
+    ctx.moveTo(px - size, py);
+    ctx.lineTo(px + size, py);
+    ctx.moveTo(px, py - size);
+    ctx.lineTo(px, py + size);
     ctx.stroke();
     
     // Circle
     ctx.beginPath();
-    ctx.arc(pos.x, pos.y, size + 5, 0, Math.PI * 2);
+    ctx.arc(px, py, size + 5, 0, Math.PI * 2);
     ctx.stroke();
     
     // Label
     ctx.font = 'bold 11px sans-serif';
     ctx.fillStyle = 'rgba(50, 255, 50, 0.9)';
     ctx.textAlign = 'center';
-    ctx.fillText(target.name, pos.x, pos.y - size - 10);
+    ctx.fillText(target.name, px, py - size - 10);
     
     return;
   }

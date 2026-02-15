@@ -5,6 +5,8 @@ import {
   waitForEvenAppBridge, 
   type EvenAppBridge,
   DeviceConnectType,
+  OsEventTypeList,
+  type EvenHubEvent,
 } from '@evenrealities/even_hub_sdk';
 
 import type { 
@@ -69,9 +71,6 @@ const appState: CompassState = {
 
 // Horizontal menu state
 let menuState: HorizontalMenuState = createMenuState(getMenuItemNames());
-
-// Track the last scroll container index for direction detection
-let lastScrollContainerIndex = 0;
 
 // SDK bridge instance
 let bridge: EvenAppBridge | null = null;
@@ -255,7 +254,7 @@ function updateBrowserDisplay(): void {
 async function initGlassesUI(): Promise<void> {
   if (!bridge) return;
 
-  const config = createSimplifiedStartupConfig();
+  const config = createSimplifiedStartupConfig(appState.menuItems);
   console.log('Creating glasses UI with horizontal menu:', JSON.stringify(config.toJson(), null, 2));
   const result = await bridge.createStartUpPageContainer(config);
 
@@ -300,84 +299,85 @@ function setupEventListeners(): void {
     updateBrowserDisplay();
   });
 
-  // Listen for UI events
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  evenHubEventUnsubscribe = bridge.onEvenHubEvent((event: any) => {
-    console.log('📨 Raw EvenHub event received:', event);
+  // Listen for UI events from ring (scroll, click, double-click)
+  evenHubEventUnsubscribe = bridge.onEvenHubEvent((event: EvenHubEvent) => {
+    console.log('📨 EvenHub event received:', event);
     
-    // Handle list events from the menu container
-    // The list container captures scroll events based on selectedItemIndex changes
-    if (event.listEvent) {
-      const listEvent = event.listEvent;
-      console.log('📋 List event:', listEvent);
-      
-      // Convert to JSON if needed
-      let eventData = listEvent;
-      if (typeof listEvent.toJson === 'function') {
-        try {
-          eventData = listEvent.toJson();
-        } catch (e) {
-          // Use original
-        }
-      }
-      
-      // Log properties for debugging
-      console.log('📋 List event data:', {
-        currentSelectItemIndex: eventData.currentSelectItemIndex,
-        currentSelectItemName: eventData.currentSelectItemName,
-        containerID: eventData.containerID,
-        eventType: eventData.eventType,
-      });
-      
-      // Determine scroll direction from index change
-      // The virtual scroll container has 20 items; scrolling changes selectedItemIndex
-      const currentIndex = eventData.currentSelectItemIndex;
-      if (currentIndex !== undefined && currentIndex !== null) {
-        const indexDiff = currentIndex - lastScrollContainerIndex;
-        const direction = indexDiff > 0 ? 'up' : 'down';
-        
-        console.log(`📊 Index changed: ${lastScrollContainerIndex} → ${currentIndex} (diff: ${indexDiff}, direction: ${direction})`);
-        lastScrollContainerIndex = currentIndex;
-        
-        if (direction === 'up') {
-          console.log('⬆️ Scroll UP - next menu item');
-          handleMenuNavigation('next');
-        } else if (direction === 'down') {
-          console.log('⬇️ Scroll DOWN - previous menu item');
-          handleMenuNavigation('prev');
-        }
+    // Extract and normalize the event type using the same robust pattern
+    // used by other Even Realities apps (timer, restapi, demo)
+    const rawEventType = getRawEventType(event);
+    let eventType = normalizeEventType(rawEventType);
+    
+    // For list events: if no explicit eventType, infer from index change
+    const incomingIndex = event.listEvent?.currentSelectItemIndex;
+    const incomingName = event.listEvent?.currentSelectItemName;
+    
+    if (eventType === undefined && event.listEvent) {
+      // Try to infer direction from index vs current selection
+      const hasIndex = typeof incomingIndex === 'number' && incomingIndex >= 0;
+      if (hasIndex && incomingIndex > menuState.selectedIndex) {
+        eventType = OsEventTypeList.SCROLL_BOTTOM_EVENT;
+      } else if (hasIndex && incomingIndex < menuState.selectedIndex) {
+        eventType = OsEventTypeList.SCROLL_TOP_EVENT;
+      } else {
+        // Same index or no index = click
+        eventType = OsEventTypeList.CLICK_EVENT;
       }
     }
-    // Handle system events for scroll/navigation (fallback)
-    else if (event.sysEvent) {
-      const sysEvent = event.sysEvent;
-      console.log('⚙️ System event:', sysEvent);
-      
-      // Convert to JSON if needed
-      let eventData = sysEvent;
-      if (typeof sysEvent.toJson === 'function') {
-        try {
-          eventData = sysEvent.toJson();
-        } catch (e) {
-          // Use original
-        }
-      }
-      
-      // Check for scroll/navigation events
-      const eventType = eventData.eventType || eventData.type;
-      if (eventType === 'scroll' || eventType === 'navigate') {
-        const direction = eventData.direction;
-        console.log('⚙️ System scroll direction:', direction);
-        if (direction === 'next' || direction === 'up') {
-          handleMenuNavigation('next');
-        } else if (direction === 'prev' || direction === 'down') {
-          handleMenuNavigation('prev');
-        }
-      }
-    } else if (event.textEvent) {
-      console.log('📝 Text event:', event.textEvent);
-    } else {
-      console.log('❓ Unknown event type:', event);
+    
+    // Also handle text/sys events that may carry click/double-click
+    if (eventType === undefined && (event.textEvent || event.sysEvent)) {
+      // Text/sys events without eventType are typically clicks
+      eventType = OsEventTypeList.CLICK_EVENT;
+    }
+    
+    console.log('📊 Parsed event:', {
+      rawEventType,
+      normalizedEventType: eventType,
+      incomingIndex,
+      incomingName,
+      currentMenuIndex: menuState.selectedIndex,
+    });
+    
+    // Handle each event type
+    switch (eventType) {
+      case OsEventTypeList.SCROLL_TOP_EVENT:
+        // Ring scroll up → previous menu item
+        console.log('⬆️ Ring scroll UP → previous menu item');
+        handleMenuNavigation('prev');
+        break;
+        
+      case OsEventTypeList.SCROLL_BOTTOM_EVENT:
+        // Ring scroll down → next menu item
+        console.log('⬇️ Ring scroll DOWN → next menu item');
+        handleMenuNavigation('next');
+        break;
+        
+      case OsEventTypeList.CLICK_EVENT:
+        // Ring click → confirm/select current item
+        console.log('🔘 Ring CLICK → select current mode');
+        // The mode is already active from scrolling, but click could
+        // trigger mode-specific actions in the future
+        handleRingClick();
+        break;
+        
+      case OsEventTypeList.DOUBLE_CLICK_EVENT:
+        // Ring double-click → could be used for back/exit
+        console.log('🔘🔘 Ring DOUBLE-CLICK');
+        handleRingDoubleClick();
+        break;
+        
+      case OsEventTypeList.FOREGROUND_ENTER_EVENT:
+        console.log('📱 Foreground enter event');
+        break;
+        
+      case OsEventTypeList.FOREGROUND_EXIT_EVENT:
+        console.log('📱 Foreground exit event');
+        break;
+        
+      default:
+        console.log('❓ Unhandled event type:', eventType, 'raw:', rawEventType);
+        break;
     }
   });
 
@@ -386,12 +386,20 @@ function setupEventListeners(): void {
   window.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key === 'ArrowUp') {
       e.preventDefault();
-      console.log('↑ Key pressed - next menu item');
-      handleMenuNavigation('next');
+      console.log('↑ Key pressed - previous menu item (matches ring scroll up)');
+      handleMenuNavigation('prev');
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
-      console.log('↓ Key pressed - previous menu item');
-      handleMenuNavigation('prev');
+      console.log('↓ Key pressed - next menu item (matches ring scroll down)');
+      handleMenuNavigation('next');
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      console.log('Enter pressed - ring click');
+      handleRingClick();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      console.log('Escape pressed - ring double-click');
+      handleRingDoubleClick();
     } else if (e.key >= '1' && e.key <= '9') {
       const index = parseInt(e.key) - 1;
       if (index >= 0 && index < appState.menuItems.length) {
@@ -403,9 +411,90 @@ function setupEventListeners(): void {
   });
 
   console.log('✓ Keyboard controls enabled:');
-  console.log('  ↑ (up arrow) / scroll up = next menu item');
-  console.log('  ↓ (down arrow) / scroll down = previous menu item');
+  console.log('  ↑ (up arrow) = previous menu item (matches ring scroll up)');
+  console.log('  ↓ (down arrow) = next menu item (matches ring scroll down)');
   console.log('  1/2/3 = select by number');
+}
+
+// ---------------------------------------------------------------------------
+// Ring event helpers
+// Adapted from the proven pattern in BxNxM/even-dev (demo, timer, restapi apps)
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract the raw eventType from an EvenHubEvent.
+ * The SDK and simulator can deliver it in many different locations/formats,
+ * so we check all known paths.
+ */
+function getRawEventType(event: EvenHubEvent): unknown {
+  const raw = (event.jsonData ?? {}) as Record<string, unknown>;
+  return (
+    event.listEvent?.eventType ??
+    event.textEvent?.eventType ??
+    event.sysEvent?.eventType ??
+    (event as Record<string, unknown>).eventType ??
+    raw.eventType ??
+    raw.event_type ??
+    raw.Event_Type ??
+    raw.type
+  );
+}
+
+/**
+ * Normalise a raw eventType value into the SDK's OsEventTypeList enum.
+ * Handles numeric values (0-3), string enum names, and abbreviations.
+ */
+function normalizeEventType(rawEventType: unknown): OsEventTypeList | undefined {
+  if (typeof rawEventType === 'number') {
+    switch (rawEventType) {
+      case 0: return OsEventTypeList.CLICK_EVENT;
+      case 1: return OsEventTypeList.SCROLL_TOP_EVENT;
+      case 2: return OsEventTypeList.SCROLL_BOTTOM_EVENT;
+      case 3: return OsEventTypeList.DOUBLE_CLICK_EVENT;
+      case 4: return OsEventTypeList.FOREGROUND_ENTER_EVENT;
+      case 5: return OsEventTypeList.FOREGROUND_EXIT_EVENT;
+      default: return undefined;
+    }
+  }
+
+  if (typeof rawEventType === 'string') {
+    const value = rawEventType.toUpperCase();
+    if (value.includes('DOUBLE')) return OsEventTypeList.DOUBLE_CLICK_EVENT;
+    if (value.includes('CLICK')) return OsEventTypeList.CLICK_EVENT;
+    if (value.includes('SCROLL_TOP') || value.includes('UP')) return OsEventTypeList.SCROLL_TOP_EVENT;
+    if (value.includes('SCROLL_BOTTOM') || value.includes('DOWN')) return OsEventTypeList.SCROLL_BOTTOM_EVENT;
+    if (value.includes('FOREGROUND_ENTER')) return OsEventTypeList.FOREGROUND_ENTER_EVENT;
+    if (value.includes('FOREGROUND_EXIT')) return OsEventTypeList.FOREGROUND_EXIT_EVENT;
+  }
+
+  // Try the SDK's own normalizer as last resort
+  try {
+    return OsEventTypeList.fromJson(rawEventType);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Handle ring single-click.
+ * Currently confirms the active mode. Can be extended for mode-specific actions.
+ */
+function handleRingClick(): void {
+  const selectedLabel = getSelectedLabel(menuState);
+  console.log(`🔘 Click: confirmed mode "${selectedLabel}" (index: ${menuState.selectedIndex})`);
+  // Mode is already applied when scrolling; click is a confirmation.
+  // Future: could trigger mode-specific actions (e.g. lock identify target)
+  updateBrowserDisplay();
+  render();
+}
+
+/**
+ * Handle ring double-click.
+ * Currently a no-op placeholder - could be used for exit or back navigation.
+ */
+function handleRingDoubleClick(): void {
+  console.log('🔘🔘 Double-click: no action assigned yet');
+  // Future: exit app, toggle detail view, reset orientation, etc.
 }
 
 /**
@@ -630,6 +719,8 @@ window.addEventListener('beforeunload', cleanup);
 // Expose functions to window for console testing
 (window as unknown as Record<string, unknown>).selectMenuItem = selectMenuItem;
 (window as unknown as Record<string, unknown>).handleMenuNavigation = handleMenuNavigation;
+(window as unknown as Record<string, unknown>).handleRingClick = handleRingClick;
+(window as unknown as Record<string, unknown>).handleRingDoubleClick = handleRingDoubleClick;
 (window as unknown as Record<string, unknown>).cycleMode = () => {
   handleMenuNavigation('next');
 };
@@ -642,8 +733,9 @@ window.addEventListener('beforeunload', cleanup);
   console.log('Selected index:', appState.selectedMenuIndex);
   console.log('Menu state:', menuState);
   console.log('Container IDs:', CONTAINER_IDS);
-  console.log('To test menu selection by index, call: selectMenuItem(0), selectMenuItem(1), selectMenuItem(2)');
-  console.log('To navigate menu, call: handleMenuNavigation("next") or handleMenuNavigation("prev")');
+  console.log('Ring events: SCROLL_TOP=prev, SCROLL_BOTTOM=next, CLICK=select, DOUBLE_CLICK=back');
+  console.log('Keyboard: ↑=prev, ↓=next, Enter=click, Escape=double-click, 1/2/3=select by number');
+  console.log('Console: selectMenuItem(0), handleMenuNavigation("next"), handleRingClick(), handleRingDoubleClick()');
 };
 
 // Start the application

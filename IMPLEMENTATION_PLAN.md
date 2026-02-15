@@ -45,13 +45,21 @@ Even Stars is a **heads-up astronomical compass** for Even Realities smart glass
 - [x] Planet orbital calculations (Mercury through Saturn)
 - [x] Deep sky object catalog (Messier objects)
 
+### Accuracy Overhaul (Completed)
+- [x] **Gnomonic (tangent-plane) projection** – replaces naive linear delta-Az/Alt mapping; correctly handles spherical geometry, azimuth convergence near zenith, and head roll (`calculator.ts` → `gnomonicProject()`)
+- [x] **IAU 1976 precession (Lieske)** – corrects J2000.0 catalog positions to the observation date (~0.36° by 2026) (`calculator.ts` → `precessJ2000()`)
+- [x] **Saemundsson atmospheric refraction** – lifts objects near the horizon by ~0.5° to match visual reality (`calculator.ts` → `applyRefraction()`)
+- [x] **Correct FOV** – updated from 60°×35° to 25°×7.8125° matching Even Realities G1 spec (25° horizontal, 200/640 aspect ratio)
+- [x] **Full renderer rewrite** – every render function (`renderStar`, `renderPlanet`, `renderConstellation`, `renderCardinalMarkers`, `renderHorizon`, `renderDeepSkyObject`, `renderStarLabels`, `renderIdentifyOverlay`, `renderFinderArrow`, `calculateDirectionToTarget`) now uses gnomonic projection
+- [x] **Detector FOV update** – `identify/detector.ts` default FOV updated to 25°×7.8125°, max identification distance reduced to 8°
+
 ### Current Rendering (Phase 3 - To be refactored)
 - [x] Canvas-based sky renderer (`renderer.ts`)
 - [x] Star rendering with magnitude-based sizing
 - [x] Constellation line rendering
 - [x] Planet rendering with symbols
 - [x] Deep sky object rendering
-- [x] Cardinal direction markers
+- [x] Cardinal direction markers (N/NE/E/SE/S/SW/W/NW)
 - [x] Label collision avoidance
 - [x] Finder arrow guidance to targets
 - [x] Image streaming to glasses (`updateImageRawData`)

@@ -37,11 +37,11 @@ export interface DetectionOptions {
 
 /** Default detection options */
 export const DEFAULT_DETECTION_OPTIONS: DetectionOptions = {
-  fovHorizontal: 60,
-  fovVertical: 40,
+  fovHorizontal: 25,
+  fovVertical: 7.8125,
   minAltitude: 10,
   maxMagnitude: 2.5,
-  maxIdentificationDistance: 15,
+  maxIdentificationDistance: 8,
 };
 
 /**
