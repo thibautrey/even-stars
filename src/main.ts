@@ -84,6 +84,18 @@ let renderLoopId: number | null = null;
 let lastRenderTime = 0;
 const RENDER_INTERVAL = 100; // Render at 10 FPS to avoid overloading glasses
 
+// Swipe/scroll throttle — prevents rapid-fire scroll events from double-triggering
+const SWIPE_COOLDOWN_MS = 300;
+let lastSwipeTime = 0;
+
+/** Returns true if enough time has passed since the last swipe to process a new one. */
+function swipeThrottleOk(): boolean {
+  const now = Date.now();
+  if (now - lastSwipeTime < SWIPE_COOLDOWN_MS) return false;
+  lastSwipeTime = now;
+  return true;
+}
+
 // Image update queue
 let imageUpdatePending = false;
 
@@ -296,84 +308,83 @@ function setupEventListeners(): void {
   });
 
   // Listen for UI events from ring (scroll, click, double-click)
+  // Pattern: check all 3 event channels independently (textEvent, sysEvent, listEvent)
+  // because a single EvenHubEvent can carry data in multiple channels simultaneously.
+  // Swipe/scroll events primarily arrive via textEvent, NOT listEvent.
+  // See SDK_DOCUMENTATION.md § "Event Handling Best Practices" for details.
   evenHubEventUnsubscribe = bridge.onEvenHubEvent((event: EvenHubEvent) => {
-    console.log('📨 EvenHub event received:', event);
-    
-    // Extract and normalize the event type using the same robust pattern
-    // used by other Even Realities apps (timer, restapi, demo)
-    const rawEventType = getRawEventType(event);
-    let eventType = normalizeEventType(rawEventType);
-    
-    // For list events: if no explicit eventType, infer from index change
-    const incomingIndex = event.listEvent?.currentSelectItemIndex;
-    const incomingName = event.listEvent?.currentSelectItemName;
-    
-    if (eventType === undefined && event.listEvent) {
-      // Try to infer direction from index vs current selection
-      const hasIndex = typeof incomingIndex === 'number' && incomingIndex >= 0;
-      if (hasIndex && incomingIndex > menuState.selectedIndex) {
-        eventType = OsEventTypeList.SCROLL_BOTTOM_EVENT;
-      } else if (hasIndex && incomingIndex < menuState.selectedIndex) {
-        eventType = OsEventTypeList.SCROLL_TOP_EVENT;
-      } else {
-        // Same index or no index = click
-        eventType = OsEventTypeList.CLICK_EVENT;
+    console.log('📨 EvenHub event received:', JSON.stringify(event, null, 0));
+
+    // --- Channel 1: textEvent (swipes/scrolls arrive here) ---
+    if (event?.textEvent) {
+      const eventType = event.textEvent.eventType;
+      console.log('📝 textEvent channel — eventType:', eventType);
+
+      if (eventType === OsEventTypeList.SCROLL_TOP_EVENT) {
+        console.log('⬆️ textEvent SCROLL_TOP → previous menu item');
+        if (swipeThrottleOk()) handleMenuNavigation('prev');
+      } else if (eventType === OsEventTypeList.SCROLL_BOTTOM_EVENT) {
+        console.log('⬇️ textEvent SCROLL_BOTTOM → next menu item');
+        if (swipeThrottleOk()) handleMenuNavigation('next');
+      } else if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
+        console.log('🔘 textEvent CLICK → select');
+        handleRingClick();
+      } else if (eventType === OsEventTypeList.DOUBLE_CLICK_EVENT) {
+        console.log('🔘🔘 textEvent DOUBLE_CLICK');
+        handleRingDoubleClick();
       }
     }
-    
-    // Also handle text/sys events that may carry click/double-click
-    if (eventType === undefined && (event.textEvent || event.sysEvent)) {
-      // Text/sys events without eventType are typically clicks
-      eventType = OsEventTypeList.CLICK_EVENT;
-    }
-    
-    console.log('📊 Parsed event:', {
-      rawEventType,
-      normalizedEventType: eventType,
-      incomingIndex,
-      incomingName,
-      currentMenuIndex: menuState.selectedIndex,
-    });
-    
-    // Handle each event type
-    switch (eventType) {
-      case OsEventTypeList.SCROLL_TOP_EVENT:
-        // Ring scroll up → previous menu item
-        console.log('⬆️ Ring scroll UP → previous menu item');
-        handleMenuNavigation('prev');
-        break;
-        
-      case OsEventTypeList.SCROLL_BOTTOM_EVENT:
-        // Ring scroll down → next menu item
-        console.log('⬇️ Ring scroll DOWN → next menu item');
-        handleMenuNavigation('next');
-        break;
-        
-      case OsEventTypeList.CLICK_EVENT:
-        // Ring click → confirm/select current item
-        console.log('🔘 Ring CLICK → select current mode');
-        // The mode is already active from scrolling, but click could
-        // trigger mode-specific actions in the future
+
+    // --- Channel 2: sysEvent (taps/clicks also arrive here) ---
+    if (event?.sysEvent) {
+      const eventType = event.sysEvent.eventType;
+      console.log('⚙️ sysEvent channel — eventType:', eventType);
+
+      if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
+        console.log('🔘 sysEvent CLICK → select');
         handleRingClick();
-        break;
-        
-      case OsEventTypeList.DOUBLE_CLICK_EVENT:
-        // Ring double-click → could be used for back/exit
-        console.log('🔘🔘 Ring DOUBLE-CLICK');
+      } else if (eventType === OsEventTypeList.DOUBLE_CLICK_EVENT) {
+        console.log('🔘🔘 sysEvent DOUBLE_CLICK');
         handleRingDoubleClick();
-        break;
-        
-      case OsEventTypeList.FOREGROUND_ENTER_EVENT:
-        console.log('📱 Foreground enter event');
-        break;
-        
-      case OsEventTypeList.FOREGROUND_EXIT_EVENT:
-        console.log('📱 Foreground exit event');
-        break;
-        
-      default:
-        console.log('❓ Unhandled event type:', eventType, 'raw:', rawEventType);
-        break;
+      } else if (eventType === OsEventTypeList.SCROLL_TOP_EVENT) {
+        console.log('⬆️ sysEvent SCROLL_TOP → previous menu item');
+        if (swipeThrottleOk()) handleMenuNavigation('prev');
+      } else if (eventType === OsEventTypeList.SCROLL_BOTTOM_EVENT) {
+        console.log('⬇️ sysEvent SCROLL_BOTTOM → next menu item');
+        if (swipeThrottleOk()) handleMenuNavigation('next');
+      }
+    }
+
+    // --- Channel 3: listEvent (for ListContainerProperty selections) ---
+    if (event?.listEvent) {
+      const le = event.listEvent;
+      const eventType = le.eventType;
+      console.log('📋 listEvent channel — eventType:', eventType,
+        'selectIdx:', le.currentSelectItemIndex,
+        'selectName:', le.currentSelectItemName);
+
+      if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
+        const idx = le.currentSelectItemIndex;
+        if (typeof idx === 'number' && idx >= 0 && idx < appState.menuItems.length) {
+          console.log(`🔘 listEvent CLICK → select menu item ${idx}: "${appState.menuItems[idx]}"`);
+          selectMenuItem(idx);
+        }
+      }
+      // Scroll events on lists are handled natively by the list widget
+    }
+
+    // --- Foreground events (neither text nor sys channel specific) ---
+    const rawEventType = getRawEventType(event);
+    const normalizedType = normalizeEventType(rawEventType);
+    if (normalizedType === OsEventTypeList.FOREGROUND_ENTER_EVENT) {
+      console.log('📱 Foreground enter event');
+    } else if (normalizedType === OsEventTypeList.FOREGROUND_EXIT_EVENT) {
+      console.log('📱 Foreground exit event');
+    }
+
+    // Log unknown events if none of the channels matched
+    if (!event?.textEvent && !event?.sysEvent && !event?.listEvent && !event?.audioEvent) {
+      console.log('❓ Unknown event shape:', JSON.stringify(event, null, 2));
     }
   });
 

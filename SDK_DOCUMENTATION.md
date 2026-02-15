@@ -17,6 +17,7 @@ TypeScript SDK for WebView developers to communicate with Even App.
 - [Data Models](#data-models)
 - [Enum Types](#enum-types)
 - [Advanced Usage](#advanced-usage)
+- [Event Handling Best Practices](#-event-handling-best-practices-from-community-apps)
 - [Notes](#notes)
 
 ---
@@ -953,6 +954,213 @@ System item event model.
 - `eventType?`: OsEventTypeList - Event type
 
 > **Note**: Currently, the SDK supports event types listEvent, textEvent, and sysEvent. Image events (imgEvent) are defined in the protocol but are not yet included in the current version's type definitions.
+
+---
+
+## 🎮 Event Handling Best Practices (from community apps)
+
+This section documents proven patterns for handling ring/touch events on Even Realities glasses, derived from community reference apps (Reddit client by fuutott, demo/timer/restapi apps in BxNxM/even-dev).
+
+### Event Channels Overview
+
+When `onEvenHubEvent` fires, a single `EvenHubEvent` object may carry data in **multiple** channels simultaneously. The three event channels are:
+
+| Channel | Property | When it fires |
+|---------|----------|---------------|
+| **textEvent** | `event.textEvent` | Scroll/swipe events (up/down) + click/double-click on the container with `isEventCapture: 1` (TextContainerProperty) |
+| **sysEvent** | `event.sysEvent` | System-level tap/click/double-click events, also scroll events |
+| **listEvent** | `event.listEvent` | Click events on ListContainerProperty items (provides `currentSelectItemIndex` and `currentSelectItemName`) |
+
+> **Critical**: Check **all three channels** with separate `if` blocks (not `else if`). A single event can contain data in multiple channels.
+
+### Where Each Gesture Arrives
+
+| Gesture | Primary channel | Also arrives in |
+|---------|----------------|-----------------|
+| Swipe forward (scroll down) | `textEvent` with `SCROLL_BOTTOM_EVENT` | Sometimes `sysEvent` |
+| Swipe backward (scroll up) | `textEvent` with `SCROLL_TOP_EVENT` | Sometimes `sysEvent` |
+| Single tap (click) | `sysEvent` with `CLICK_EVENT` | `textEvent` with `CLICK_EVENT` or `undefined` |
+| Double tap | `sysEvent` with `DOUBLE_CLICK_EVENT` | `textEvent` with `DOUBLE_CLICK_EVENT` |
+| List item selection | `listEvent` with `CLICK_EVENT` | — |
+
+> **Key insight**: Swipe/scroll events primarily arrive via `textEvent`, NOT via `listEvent`. If you only listen to `listEvent` for your menu navigation, you will miss scroll/swipe events. List scroll is handled natively by the list widget only for `ListContainerProperty` items.
+
+### The `isEventCapture` Rule
+
+- Exactly **one container** must have `isEventCapture: 1`; all others must be `0`.
+- Only the container with `isEventCapture: 1` generates `textEvent` callbacks for scroll and click.
+- When rebuilding pages (e.g., moving selection), set `isEventCapture: 1` on the **currently selected/active** container.
+
+```typescript
+// Reddit app pattern: dynamically set isEventCapture on the selected container
+for (let i = 0; i < ITEMS_PER_PAGE; i++) {
+  const isSelected = (i === selectedSlot);
+  textContainers.push(new TextContainerProperty({
+    // ... position/size ...
+    containerID: containerIds[i],
+    isEventCapture: isSelected ? 1 : 0,  // Only selected container captures events
+    borderWidth: isSelected ? 3 : 0,     // Visual selection indicator
+  }));
+}
+```
+
+### Robust Event Type Extraction
+
+The SDK, simulator, and real device can deliver `eventType` in many different locations and formats. Use this pattern to extract it reliably:
+
+```typescript
+function getRawEventType(event: EvenHubEvent): unknown {
+  const raw = (event.jsonData ?? {}) as Record<string, unknown>;
+  return (
+    event.listEvent?.eventType ??
+    event.textEvent?.eventType ??
+    event.sysEvent?.eventType ??
+    (event as Record<string, unknown>).eventType ??
+    raw.eventType ??
+    raw.event_type ??
+    raw.Event_Type ??
+    raw.type
+  );
+}
+```
+
+### Event Type Normalization
+
+The raw `eventType` can be a number, a string, or an SDK enum value. Normalize it:
+
+```typescript
+function normalizeEventType(rawEventType: unknown): OsEventTypeList | undefined {
+  // Numeric values (0-3)
+  if (typeof rawEventType === 'number') {
+    switch (rawEventType) {
+      case 0: return OsEventTypeList.CLICK_EVENT;
+      case 1: return OsEventTypeList.SCROLL_TOP_EVENT;
+      case 2: return OsEventTypeList.SCROLL_BOTTOM_EVENT;
+      case 3: return OsEventTypeList.DOUBLE_CLICK_EVENT;
+      default: return undefined;
+    }
+  }
+
+  // String values (various formats from simulator/device)
+  if (typeof rawEventType === 'string') {
+    const value = rawEventType.toUpperCase();
+    if (value.includes('DOUBLE'))      return OsEventTypeList.DOUBLE_CLICK_EVENT;
+    if (value.includes('CLICK'))       return OsEventTypeList.CLICK_EVENT;
+    if (value.includes('SCROLL_TOP') || value.includes('UP'))
+      return OsEventTypeList.SCROLL_TOP_EVENT;
+    if (value.includes('SCROLL_BOTTOM') || value.includes('DOWN'))
+      return OsEventTypeList.SCROLL_BOTTOM_EVENT;
+  }
+
+  return undefined;
+}
+```
+
+> **Important**: Check `'DOUBLE'` before `'CLICK'` — `DOUBLE_CLICK` contains the word `CLICK`.
+
+### `eventType === undefined` Means Click
+
+When `eventType` is `undefined` (or missing), treat it as a **CLICK_EVENT**. This is a known SDK behavior where `CLICK_EVENT = 0` can be parsed as falsy/undefined:
+
+```typescript
+if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
+  // Handle as click/tap
+  await this.handleTap();
+}
+```
+
+### Reference Event Handler (Reddit App Pattern)
+
+This is the complete event handling pattern used by the Reddit client. It processes all three channels independently:
+
+```typescript
+bridge.onEvenHubEvent((event: EvenHubEvent) => {
+  // --- Channel 1: textEvent (swipes come here) ---
+  if (event?.textEvent) {
+    const eventType = event.textEvent.eventType;
+
+    if (eventType === OsEventTypeList.SCROLL_TOP_EVENT) {
+      if (swipeThrottleOk()) handleSwipeBackward();      // Swipe up/backward
+    } else if (eventType === OsEventTypeList.SCROLL_BOTTOM_EVENT) {
+      if (swipeThrottleOk()) handleSwipeForward();        // Swipe down/forward
+    } else if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
+      handleTap();                                         // Single tap
+    } else if (eventType === OsEventTypeList.DOUBLE_CLICK_EVENT) {
+      handleDoubleTap();                                   // Double tap
+    }
+  }
+
+  // --- Channel 2: sysEvent (taps/double-taps come here) ---
+  if (event?.sysEvent) {
+    const eventType = event.sysEvent.eventType;
+
+    if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
+      handleTap();
+    } else if (eventType === OsEventTypeList.DOUBLE_CLICK_EVENT) {
+      handleDoubleTap();
+    } else if (eventType === OsEventTypeList.SCROLL_TOP_EVENT) {
+      if (swipeThrottleOk()) handleSwipeBackward();
+    } else if (eventType === OsEventTypeList.SCROLL_BOTTOM_EVENT) {
+      if (swipeThrottleOk()) handleSwipeForward();
+    }
+  }
+
+  // --- Channel 3: listEvent (only for ListContainerProperty) ---
+  if (event?.listEvent) {
+    const le = event.listEvent;
+    const eventType = le.eventType;
+
+    if (eventType === OsEventTypeList.CLICK_EVENT || eventType === undefined) {
+      const idx = le.currentSelectItemIndex;
+      // Handle list item selection using idx
+    }
+    // Scroll events are handled natively by the list widget — no manual paging needed
+  }
+});
+```
+
+### Swipe Throttling
+
+Scroll/swipe events can fire rapidly. Use a cooldown to prevent double-processing:
+
+```typescript
+const SWIPE_COOLDOWN_MS = 300;
+let lastSwipeTime = 0;
+
+function swipeThrottleOk(): boolean {
+  const now = Date.now();
+  if (now - lastSwipeTime < SWIPE_COOLDOWN_MS) return false;
+  lastSwipeTime = now;
+  return true;
+}
+```
+
+### Event-to-Action Mapping Summary
+
+| OsEventTypeList value | Numeric | Gesture | Typical action |
+|----------------------|---------|---------|---------------|
+| `CLICK_EVENT` | 0 | Single tap on ring/temple | Select / confirm |
+| `SCROLL_TOP_EVENT` | 1 | Swipe backward on ring | Previous item / scroll up |
+| `SCROLL_BOTTOM_EVENT` | 2 | Swipe forward on ring | Next item / scroll down |
+| `DOUBLE_CLICK_EVENT` | 3 | Double tap on ring/temple | Back / exit / toggle |
+
+### Common Pitfalls
+
+1. **Only checking `listEvent` for scroll**: Scroll events arrive via `textEvent`, not `listEvent`. List containers handle scrolling internally, but you still need `textEvent` for manual page management.
+2. **Using `else if` between channels**: A single `EvenHubEvent` can contain data in `textEvent` AND `sysEvent` simultaneously. Use separate `if` blocks.
+3. **Not handling `eventType === undefined`**: The SDK sometimes delivers `CLICK_EVENT` (value 0) as `undefined`. Always treat `undefined` as click.
+4. **Missing swipe throttle**: Without throttling, a single swipe gesture can trigger multiple `SCROLL_*` events.
+5. **Static `isEventCapture`**: When rebuilding pages to show selection changes, update `isEventCapture: 1` to follow the active/selected container.
+6. **Duplicate action execution**: Since the same gesture can arrive in multiple channels (e.g., click in both `textEvent` and `sysEvent`), consider using a debounce or deduplication mechanism if your handlers have side effects.
+
+### Container Strategy by App Type
+
+| App type | Container setup | Event flow |
+|----------|----------------|------------|
+| **Static list menu** | `ListContainerProperty` with `isEventCapture: 1` | Scroll handled natively by list widget; clicks via `listEvent` |
+| **Paginated text views** | Multiple `TextContainerProperty`, active one has `isEventCapture: 1` | Scroll via `textEvent` (SCROLL_TOP/BOTTOM); clicks via `textEvent` + `sysEvent` |
+| **Image/canvas view** | `ImageContainerProperty` + `TextContainerProperty` with `isEventCapture: 1` | All events via `textEvent` + `sysEvent` (image containers don't generate events) |
+| **Mixed (Reddit pattern)** | Switch between `ListContainerProperty` (for native lists) and `TextContainerProperty` (for paginated content) using `rebuildPageContainer` | Different event flows depending on current view |
 
 ---
 
