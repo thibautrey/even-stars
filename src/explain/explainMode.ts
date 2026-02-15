@@ -8,16 +8,17 @@ import type {
   CompassState,
 } from '../types';
 import { AppMode } from '../types';
+import { SearchObjectType } from '../types/search';
 import {
   findNearestObject,
   type DetectionOptions,
   DEFAULT_DETECTION_OPTIONS,
 } from '../identify/detector';
 import {
-  getObjectDescription,
+  getObject,
   getDefaultDescription,
-  type CelestialDescription,
-} from '../sky/descriptions';
+  type CelestialObject,
+} from '../sky/objectCatalog';
 
 // ============================================================================
 // Types
@@ -75,8 +76,8 @@ export interface ExplainDisplay {
   isLocked: boolean;
   /** The object being explained */
   currentObject: IdentifiedObject | null;
-  /** Full description data */
-  description: CelestialDescription | null;
+  /** Full object data with description */
+  description: CelestialObject | null;
 }
 
 /**
@@ -123,7 +124,7 @@ export const DEFAULT_EXPLAIN_CONFIG: ExplainModeConfig = {
 interface ExplainInternalState {
   state: ExplainState;
   currentObject: IdentifiedObject | null;
-  description: CelestialDescription | null;
+  description: CelestialObject | null;
   /** Scroll offset in pixels */
   scrollOffset: number;
   /** When scrolling started (or last reset) */
@@ -211,7 +212,7 @@ export class ExplainModeManager {
   /**
    * Get current description
    */
-  getDescription(): CelestialDescription | null {
+  getDescription(): CelestialObject | null {
     return this.internal.description;
   }
 
@@ -365,19 +366,33 @@ export class ExplainModeManager {
     s.streakCount = 1;
     s.streakId = detected.object.id;
 
-    // Load description
-    const desc = getObjectDescription(detected.object.name);
-    if (desc) {
-      s.description = desc;
-    } else {
-      // Generate a default description
-      s.description = getDefaultDescription(
+    // Load complete object info from centralized catalog
+    let obj = getObject(detected.object.name);
+    if (!obj) {
+      // Generate a default object for unknown items
+      const desc = getDefaultDescription(
         detected.object.name,
         detected.object.type,
         detected.object.magnitude,
         detected.object.info ?? undefined,
       );
+      obj = {
+        id: detected.object.id,
+        name: detected.object.name,
+        type: detected.object.type as SearchObjectType,
+        ra: detected.object.ra,
+        dec: detected.object.dec,
+        magnitude: detected.object.magnitude ?? 0,
+        constellation: undefined,
+        summary: desc.summary,
+        description: desc.description,
+        distance: desc.distance,
+        season: desc.season,
+        funFact: desc.funFact,
+        isUserDiscovered: false,
+      };
     }
+    s.description = obj;
 
     // Reset scroll if showing a new object
     if (isNew) {

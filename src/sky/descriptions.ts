@@ -244,15 +244,286 @@ export const PLANET_DESCRIPTIONS: Record<string, CelestialDescription> = {
 };
 
 // ============================================================================
+// DEEP SKY OBJECT DESCRIPTIONS
+// ============================================================================
+
+export const DEEPSKY_DESCRIPTIONS: Record<string, CelestialDescription> = {
+  'Andromeda Galaxy': {
+    name: 'Andromeda Galaxy',
+    summary: 'Nearest major galaxy, larger than the Milky Way',
+    description: 'The Andromeda Galaxy (M31) is the nearest major galaxy to the Milky Way, located 2.5 million light-years away. It contains about 1 trillion stars and is heading toward the Milky Way at 110 km/s. In about 4.5 billion years, Andromeda will merge with the Milky Way to form a new elliptical galaxy. Despite being the most distant object visible to the naked eye, it covers an area of sky six times wider than the full Moon.',
+    distance: '2.5 million light-years',
+    season: 'Autumn/Winter',
+    funFact: 'Andromeda is so large that under dark skies you can fit 6 full Moons across its disk.',
+  },
+  'Triangulum Galaxy': {
+    name: 'Triangulum Galaxy',
+    summary: 'Third-largest galaxy in the Local Group',
+    description: 'The Triangulum Galaxy (M33) is a spiral galaxy about 3 million light-years away and part of the Local Group with the Milky Way and Andromeda. Though it contains about 40 billion stars, it appears much smaller than Andromeda due to its distance and orientation. It\'s a favorite target for astrophotographers because its spiral structure is well-defined and relatively easy to observe.',
+    distance: '3 million light-years',
+    season: 'Autumn/Winter',
+    funFact: 'M33 is one of the farthest objects you can see without binoculars.',
+  },
+  'Whirlpool Galaxy': {
+    name: 'Whirlpool Galaxy',
+    summary: 'Classic spiral galaxy with prominent arms',
+    description: 'The Whirlpool Galaxy (M51) is a grand-design spiral galaxy about 23 million light-years away. It\'s famous for its striking spiral arms and is interacting with the smaller NGC 5195 galaxy. This gravitational encounter is responsible for the dramatic spiral structure that makes M51 one of the most photographed galaxies. The galaxy is tilted toward us, giving an excellent view of its spiral structure.',
+    distance: '23 million light-years',
+    season: 'Spring',
+    funFact: 'M51 was one of the first objects confirmed to be outside the Milky Way.',
+  },
+  'Black Eye Galaxy': {
+    name: 'Black Eye Galaxy',
+    summary: 'Galaxy with prominent dark dust lane',
+    description: 'The Black Eye Galaxy (M64) is a spiral galaxy with an unusual large dust lane crossing in front of its bright central core, giving it the appearance of an eye with an eyebrow. This dust structure makes it one of the most distinctive galaxies visible through amateur telescopes. It\'s located 24 million light-years away and contains about 100 billion stars.',
+    distance: '24 million light-years',
+    season: 'Spring',
+    funFact: 'The dust lane may be material from a smaller galaxy that M64 absorbed in the past.',
+  },
+  'Phantom Galaxy': {
+    name: 'Phantom Galaxy',
+    summary: 'Grand-design spiral galaxy with perfect symmetry',
+    description: 'The Phantom Galaxy (M74) is a face-on spiral galaxy famous for its perfect symmetrical spiral structure and ten clearly defined spiral arms. Located 32 million light-years away, it\'s a favorite for professional and amateur astronomers because of its peaceful, regular appearance. The term "grand design" refers to its prominent and well-defined spiral arms.',
+    distance: '32 million light-years',
+    season: 'Autumn/Winter',
+    funFact: 'The Phantom Galaxy\'s spins one rotation every 300 million years.',
+  },
+  'Cetus A Galaxy': {
+    name: 'Cetus A Galaxy',
+    summary: 'Active radio galaxy with powerful jets',
+    description: 'Cetus A (M77) is a Seyfert galaxy about 47 million light-years away, meaning it has an extremely bright core powered by a supermassive black hole. It\'s one of the strongest radio sources in the sky and shows powerful jets of energy extending millions of light-years into space. The galaxy is spiral-shaped internally but appears much smaller than more distant spirals.',
+    distance: '47 million light-years',
+    season: 'Autumn/Winter',
+    funFact: 'M77 is a billion times more luminous than the Sun at radio wavelengths.',
+  },
+  'Bode\'s Galaxy': {
+    name: 'Bode\'s Galaxy',
+    summary: 'Bright spiral galaxy with smooth structure',
+    description: 'Bode\'s Galaxy (M81) is a grand-design spiral galaxy about 12 million light-years away, making it one of the nearest galaxies to Earth. It\'s nearly as large as the Andromeda Galaxy but shines with a more concentrated light. M81 is gravitationally interacting with nearby M82 (Cigar Galaxy), and these two galaxies are among the most prominent in the northern sky.',
+    distance: '12 million light-years',
+    season: 'Winter/Spring',
+    funFact: 'Bode\'s Galaxy formed from the collision of two smaller galaxies billions of years ago.',
+  },
+  'Cigar Galaxy': {
+    name: 'Cigar Galaxy',
+    summary: 'Starburst galaxy with intense star formation',
+    description: 'The Cigar Galaxy (M82) is an edge-on spiral galaxy famous for its intense starburst activity, with star formation occurring at rates 10 times higher than the Milky Way. Located 11.5 million light-years away, it\'s undergoing gravitational tidal forces from Bode\'s Galaxy (M81), which is fueling the extreme star formation. X-rays from massive stars and supernova explosions create dramatic galactic winds.',
+    distance: '11.5 million light-years',
+    season: 'Winter/Spring',
+    funFact: 'The starburst in M82 will eventually calm down over the next few billion years.',
+  },
+  'Sombrero Galaxy': {
+    name: 'Sombrero Galaxy',
+    summary: 'Edge-on galaxy with spectacular dust lane',
+    description: 'The Sombrero Galaxy (M104) is an edge-on spiral galaxy about 29 million light-years away, famous for its unusual appearance. A massive dust lane encircles the galaxy\'s bright core, creating the distinctive sombrero shape. The prominence of this dust band suggests a major galactic collision in the distant past. M104 contains about 800 billion stars and a supermassive black hole.',
+    distance: '29 million light-years',
+    season: 'Spring',
+    funFact: 'The Sombrero\'s dust lane is so thick it blocks visible light from the galaxy\'s bright center in some areas.',
+  },
+  'Orion Nebula': {
+    name: 'Orion Nebula',
+    summary: 'Brightest emission nebula, stellar nursery',
+    description: 'The Orion Nebula (M42) is the brightest emission nebula visible to the naked eye and one of the most famous deep sky objects. Located 1,300 light-years away, it\'s a stellar nursery where hundreds of new stars are actively forming. The nebula glows from radiation emitted by hot young stars at its core. Through a telescope, you can see the Trapezium Cluster of four bright hot stars that illuminate the nebula.',
+    distance: '1,300 light-years',
+    season: 'Winter',
+    funFact: 'New stars are being born in the Orion Nebula right now at a rate of about 1,500 per year.',
+  },
+  'De Mairan\'s Nebula': {
+    name: 'De Mairan\'s Nebula',
+    summary: 'Part of the Orion Nebula complex',
+    description: 'De Mairan\'s Nebula (M43) is a bright nebula and a distinct part of the larger Orion Nebula complex. It\'s separated from M42 by a dark dust lane and contains its own bright central star. The nebula is illuminated by a young hot star similar to those in M42, making it an excellent target for studying stellar formation.',
+    distance: '1,300 light-years',
+    season: 'Winter',
+    funFact: 'M43 was cataloged separately from M42 because of the dark dust lane between them.',
+  },
+  'Ring Nebula': {
+    name: 'Ring Nebula',
+    summary: 'Archetypal planetary nebula, glowing stellar remnant',
+    description: 'The Ring Nebula (M57) is perhaps the most famous planetary nebula and is created by a dying star that has ejected its outer layers. Located 2,200 light-years away in the constellation Lyra, it appears as a glowing ring of gas surrounding a white dwarf. The ring is thought to be a torus, with the dark center being a hole through the middle rather than an empty space.',
+    distance: '2,200 light-years',
+    season: 'Summer',
+    funFact: 'M57 won\'t remain a ring forever—in about 10,000 years it will expand and fade away.',
+  },
+  'Dumbbell Nebula': {
+    name: 'Dumbbell Nebula',
+    summary: 'Large, bright planetary nebula with twin lobes',
+    description: 'The Dumbbell Nebula (M27) is one of the largest and brightest planetary nebulae, located about 1,200 light-years away. Its distinctive dumbbell shape comes from two lobes of gas expanding outward from a central white dwarf. The nebula glows brilliantly in green and red wavelengths of light. Through a telescope it\'s a spectacular sight, with details visible in its structure.',
+    distance: '1,200 light-years',
+    season: 'Summer',
+    funFact: 'The Dumbbell Nebula was the first planetary nebula discovered.',
+  },
+  'Owl Nebula': {
+    name: 'Owl Nebula',
+    summary: 'Planetary nebula with eye-like appearance',
+    description: 'The Owl Nebula (M97) is a planetary nebula located about 2,600 light-years away in Ursa Major. True to its name, it has two prominent dark spots that resemble owl eyes, created by denser regions in the nebula shell. The nebula is much larger than it appears because its outer regions are extremely faint and require dark skies and good optics to fully appreciate.',
+    distance: '2,600 light-years',
+    season: 'Winter/Spring',
+    funFact: 'The Owl Nebula\'s total expansion rate is about 26 km/s.',
+  },
+  'Trifid Nebula': {
+    name: 'Trifid Nebula',
+    summary: 'Three-lobed nebula combining three types',
+    description: 'The Trifid Nebula (M20) is a complex nebula featuring three distinct types: a red emission nebula, a blue reflection nebula, and a dark absorption nebula that divides it into three lobes. Located 6,000 light-years away in Sagittarius, it\'s illuminated by a hot central star. The three types show different processes of interaction between gas and starlight.',
+    distance: '6,000 light-years',
+    season: 'Summer',
+    funFact: 'The dark dividing lines in M20 are caused by cosmic dust blocking starlight.',
+  },
+  'Lagoon Nebula': {
+    name: 'Lagoon Nebula',
+    summary: 'Large H II region with dark dust lane',
+    description: 'The Lagoon Nebula (M8) is a bright H II region about 6,000 light-years away in Sagittarius. It gets its name from the dark dust lane running through its center, resembling a lagoon. The nebula contains several embedded star clusters and is an excellent region for studying stellar formation. It\'s one of the larger nebulae visible with binoculars under dark skies.',
+    distance: '6,000 light-years',
+    season: 'Summer',
+    funFact: 'The Lagoon Nebula spans an area equivalent to 4 full Moon diameters.',
+  },
+  'Omega Nebula': {
+    name: 'Omega Nebula',
+    summary: 'Swan-shaped emission nebula',
+    description: 'The Omega Nebula (M17), also called the Swan Nebula, is a bright emission nebula about 6,000 light-years away in Sagittarius. Its distinctive shape looks like the Greek letter Omega (Ω) or a graceful swan in flight. The nebula is illuminated by the radiation from hot young stars within it, creating an excellent stellar nursery for studying star formation processes.',
+    distance: '6,000 light-years',
+    season: 'Summer',
+    funFact: 'In the southern hemisphere, M17 is sometimes called the Checkmark Nebula.',
+  },
+  'Great Globular Cluster in Hercules': {
+    name: 'Great Globular Cluster in Hercules',
+    summary: 'Brightest globular cluster in northern sky',
+    description: 'The Great Globular Cluster in Hercules (M13) is the brightest globular cluster visible from the northern hemisphere, located about 25,000 light-years away. It contains several hundred thousand stars packed into a sphere about 145 light-years in diameter. M13 was chosen as the target for the Arecibo message in 1974, a radio signal beamed toward extraterrestrial life. Through binoculars it appears as a faint fuzzball; telescopes resolve thousands of individual stars.',
+    distance: '25,000 light-years',
+    season: 'Summer',
+    funFact: 'M13 is so bright that it\'s visible to the naked eye under perfect conditions.',
+  },
+  'Canes Venatici Globular Cluster': {
+    name: 'Canes Venatici Globular Cluster',
+    summary: 'Compact, rich globular cluster',
+    description: 'The Canes Venatici Globular Cluster (M3) is a magnificent globular cluster about 35,000 light-years away containing about 500,000 stars. Despite being fainter than M13, it\'s considered by many to be more beautiful due to its more compact appearance and more even star distribution. M3 is one of the best regions for studying the evolution of old stars.',
+    distance: '35,000 light-years',
+    season: 'Spring',
+    funFact: 'M3 contains many variable stars that change brightness over time.',
+  },
+  'Serpens Globular Cluster': {
+    name: 'Serpens Globular Cluster',
+    summary: 'Oblate spheroid globular cluster',
+    description: 'The Serpens Globular Cluster (M5) is a bright globular cluster about 24,500 light-years away in the constellation Serpens. It\'s one of the oldest clusters we know of, with an age of about 13 billion years. M5 has an interesting flattened shape (oblate spheroid) rather than a perfect sphere, possibly due to its rapid rotation.',
+    distance: '24,500 light-years',
+    season: 'Spring/Summer',
+    funFact: 'The core of M5 is so densely packed that stars are colliding and merging.',
+  },
+  'Ophiuchus Globular Cluster': {
+    name: 'Ophiuchus Globular Cluster',
+    summary: 'Rich globular cluster with distinct core',
+    description: 'The Ophiuchus Globular Cluster (M10) is a globular cluster about 14,300 light-years away featuring a bright, concentrated core surrounded by a more diffuse outer region. It contains hundreds of thousands of stars and shows clear signs of core collapse, where the central region becomes increasingly dense over time. M10 is an excellent laboratory for studying stellar dynamics.',
+    distance: '14,300 light-years',
+    season: 'Summer',
+    funFact: 'M10\'s characteristic structure shows the effects of gravitational interactions among its millions of stars.',
+  },
+  'Pegasus Globular Cluster': {
+    name: 'Pegasus Globular Cluster',
+    summary: 'Distant globular cluster',
+    description: 'The Pegasus Globular Cluster (M15) is a densely packed globular cluster about 35,000 light-years away in Pegasus. It\'s one of the most concentrated globular clusters known, with a very tight stellar core. Despite being relatively faint, M15 is a popular target for advanced amateur astronomers due to its interesting structure.',
+    distance: '35,000 light-years',
+    season: 'Autumn',
+    funFact: 'M15 contains one of the densest stellar cores known, possibly harboring a central black hole.',
+  },
+  'Aquarius Globular Cluster': {
+    name: 'Aquarius Globular Cluster',
+    summary: 'Distant southern globular cluster',
+    description: 'The Aquarius Globular Cluster (M2) is a bright globular cluster about 37,500 light-years away, one of the most distant globular clusters observable from the northern hemisphere. Despite its distance, it remains quite bright and visible in small telescopes. M2 contains over 150,000 stars within a sphere about 175 light-years in diameter.',
+    distance: '37,500 light-years',
+    season: 'Autumn',
+    funFact: 'M2 is so distant that its variable stars are at the edge of what we can observe.',
+  },
+  'Sagittarius Globular Cluster': {
+    name: 'Sagittarius Globular Cluster',
+    summary: 'Brightest globular cluster in southern sky',
+    description: 'The Sagittarius Globular Cluster (M22) is the brightest globular cluster visible from the southern hemisphere, located about 10,600 light-years away. It contains over 500,000 stars packed into a region about 35 light-years across. M22 is visible to the naked eye under dark skies and is one of the most densely packed stellar systems known.',
+    distance: '10,600 light-years',
+    season: 'Summer',
+    funFact: 'M22 is one of the closest globular clusters to Earth, making it ideal for detailed study.',
+  },
+  'Hercules Globular Cluster': {
+    name: 'Hercules Globular Cluster',
+    summary: 'Compact globular cluster with notable structure',
+    description: 'The Hercules Globular Cluster (M92) is a bright globular cluster about 26,700 light-years away. Though often overlooked in favor of the nearby M13, M92 is actually remarkably similar and equally beautiful. It shows clear concentric rings of stars when viewed through a telescope, and contains about 330,000 stars.',
+    distance: '26,700 light-years',
+    season: 'Summer',
+    funFact: 'M92 is one of the oldest globular clusters known, with an age of about 14 billion years.',
+  },
+  'Auriga Open Cluster': {
+    name: 'Auriga Open Cluster',
+    summary: 'Rich open cluster with hundreds of stars',
+    description: 'The Auriga Open Cluster (M37) is one of the richest open clusters known, containing over 500 stars spread across a region about 24 light-years wide. Located about 4,500 light-years away in Auriga, M37 is famous for its beautiful golden and red colored stars that give it a jeweled appearance through a telescope.',
+    distance: '4,500 light-years',
+    season: 'Winter',
+    funFact: 'The many different colored stars in M37 reflect different temperatures and ages.',
+  },
+  'Pleiades': {
+    name: 'Pleiades',
+    summary: 'Brilliant open cluster with mythology',
+    description: 'The Pleiades (M45) is one of the most famous open clusters and arguably the most beautiful asterism in the night sky. Located about 440 light-years away in Taurus, it\'s a group of young, hot, blue stars surrounded by reflection nebulosity. The Pleiades is visible to the naked eye and appears as a tiny dipper-shaped group. In many cultures, it\'s known as the Seven Sisters.',
+    distance: '440 light-years',
+    season: 'Winter',
+    funFact: 'Islamic calendars have traditionally used the Pleiades to mark the beginning of the year.',
+  },
+  'Beehive Cluster': {
+    name: 'Beehive Cluster',
+    summary: 'Ancient open cluster, naked eye visible',
+    description: 'The Beehive Cluster (M44) is one of the oldest known open clusters, located about 577 light-years away in Cancer. Despite containing several hundred stars, it\'s quite extended and appears as a misty patch to the naked eye in dark skies. The cluster is surrounded by a faint nebula, though much of it has dispersed. The cluster is about 730 million years old, making its stars significantly older than those in the Pleiades.',
+    distance: '577 light-years',
+    season: 'Winter/Spring',
+    funFact: 'The Beehive is one of the nearest open clusters to Earth.',
+  },
+  'Gemini Open Cluster': {
+    name: 'Gemini Open Cluster',
+    summary: 'Young, rich open cluster',
+    description: 'The Gemini Open Cluster (M35) is a bright, young open cluster about 2,150 light-years away in Gemini. It contains several hundred stars and shows clear evidence of stellar formation. Through a telescope, M35 appears as a beautiful field of white stars on a dark background, with some members showing subtle color variations.',
+    distance: '2,150 light-years',
+    season: 'Winter',
+    funFact: 'M35 is young enough that some of its stars are still clearing away nebulosity.',
+  },
+  'Wild Duck Cluster': {
+    name: 'Wild Duck Cluster',
+    summary: 'Spectacular open cluster with fan shape',
+    description: 'The Wild Duck Cluster (M11) is one of the densest open clusters known, containing several thousand stars. Located about 6,000 light-years away in Scutum, it derives its name from the flight pattern of a wild duck flock. Through a telescope, hundreds of stars are resolvable, creating one of the most spectacular stellar scenes in the night sky.',
+    distance: '6,000 light-years',
+    season: 'Summer',
+    funFact: 'M11 is so dense that it may eventually become a globular cluster.',
+  },
+  'Crab Nebula': {
+    name: 'Crab Nebula',
+    summary: 'Supernova remnant with pulsar',
+    description: 'The Crab Nebula (M1) is a supernova remnant resulting from a supernova explosion observed in 1054 AD by Chinese astronomers. Located about 6,500 light-years away in Taurus, it contains a rapidly spinning neutron star (pulsar) at its center. The nebula is expanding at about 1,500 km/s and continues to brighten as the pulsar supplies energy. It\'s one of the most studied objects in modern astronomy.',
+    distance: '6,500 light-years',
+    season: 'Winter',
+    funFact: 'The pulsar in the Crab Nebula rotates 30 times per second and is the remnant of the original star\'s core.',
+  },
+  'Butterfly Cluster': {
+    name: 'Butterfly Cluster',
+    summary: 'Open cluster with distinctive butterfly shape',
+    description: 'The Butterfly Cluster (M6) is a bright open cluster in the constellation Scorpius, located about 1,600 light-years away. It gets its name from its distinctive butterfly shape formed by its brightest stars. The cluster contains about 80 bright stars with a red supergiant prominently positioned among them, creating a particularly beautiful sight through telescopes.',
+    distance: '1,600 light-years',
+    season: 'Summer',
+    funFact: 'The red star in M6 creates a striking color contrast with the blue and white stars in the cluster.',
+  },
+  'Ptolemaeus Cluster': {
+    name: 'Ptolemaeus Cluster',
+    summary: 'Large, loose open cluster',
+    description: 'The Ptolemaeus Cluster (M7) is one of the largest and brightest open clusters, located about 980 light-years away in Scorpius. It was known to the ancient Greeks and was cataloged by Ptolemy in the 2nd century. M7 contains several hundred stars spread across an area of sky about 1.3 degrees wide—roughly equivalent to 2.6 full Moon diameters.',
+    distance: '980 light-years',
+    season: 'Summer',
+    funFact: 'M7 is visible to the naked eye even from light-polluted locations.',
+  },
+};
+
+// ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 
 /**
  * Get description for a celestial object by name
- * Searches built-in stars/planets first, then the user-discovered catalog
+ * Searches built-in stars/planets/deepsky first, then the user-discovered catalog
  */
 export function getObjectDescription(name: string): CelestialDescription | null {
-  return STAR_DESCRIPTIONS[name] || PLANET_DESCRIPTIONS[name] || getUserDescription(name) || null;
+  return STAR_DESCRIPTIONS[name] || PLANET_DESCRIPTIONS[name] || DEEPSKY_DESCRIPTIONS[name] || getUserDescription(name) || null;
 }
 
 /**

@@ -41,6 +41,27 @@ export {
   type LLMCelestialObject,
 } from './userCatalog';
 export {
+  getObject,
+  getObjectById,
+  getObjectSpecs,
+  getObjectInfo,
+  hasObject,
+  getObjectsByType,
+  searchObjects,
+  getDeepSkyByCatalogId,
+  getDeepSkyBySubType,
+  getObjectsByConstellation,
+  getObjectsBrighter,
+  getUserDiscoveredObjects,
+  getCatalogSize,
+  getObjectCountByType,
+  getAllConstellations,
+  invalidateCache,
+  refreshCatalog,
+  type CelestialObject,
+  type ObjectSearchResult,
+} from '../sky/objectCatalog';
+export {
   createSession,
   resetSession,
   sessionInfo,

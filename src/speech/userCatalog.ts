@@ -6,6 +6,7 @@
 import type { SearchableObject } from '../types/search';
 import { SearchObjectType } from '../types/search';
 import type { CelestialDescription } from '../sky/descriptions';
+import { refreshCatalog } from '../sky/objectCatalog';
 
 // ============================================================================
 // Storage keys
@@ -124,7 +125,8 @@ export function getUserDescriptions(): Record<string, CelestialDescription> {
 
 /**
  * Store a newly-discovered LLM object into both the searchable catalog
- * and the description catalog.  Returns the SearchableObject that was added.
+ * and the description catalog. Also invalidates the centralized object catalog.
+ * Returns the SearchableObject that was added.
  */
 export function addLLMObjectToCatalog(llmObj: LLMCelestialObject): SearchableObject {
   const searchable = llmObjectToSearchable(llmObj);
@@ -151,6 +153,9 @@ export function addLLMObjectToCatalog(llmObj: LLMCelestialObject): SearchableObj
   try {
     localStorage.setItem(DESCRIPTIONS_KEY, JSON.stringify(descriptions));
   } catch { /* quota */ }
+
+  // Refresh the centralized catalog to include this new object
+  refreshCatalog();
 
   return searchable;
 }

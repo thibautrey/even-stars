@@ -18,6 +18,7 @@ import {
 } from '../sky/calculator';
 import { BRIGHT_STARS } from '../sky/stars';
 import { PLANETS, getPlanetHorizontalCoords, type Planet } from '../sky/planets';
+import { getUserCatalogObjects } from '../speech/userCatalog';
 
 /**
  * Options for object detection
@@ -124,6 +125,7 @@ function planetToFocusTarget(planet: Planet): FocusTarget {
 /**
  * Get all candidate objects that could be identified
  * Filters by visibility criteria (magnitude, altitude)
+ * Includes: bright stars, planets, and user-discovered objects
  */
 export function getCandidateObjects(
   location: GeoLocation,
@@ -163,6 +165,52 @@ export function getCandidateObjects(
         azimuth: position.azimuth,
         altitude: position.altitude,
         distance: 0,
+      };
+      candidates.push(target);
+    }
+  }
+  
+  // Add user-discovered objects from the local catalog
+  // These are objects that have been identified through the find target + LLM feature
+  // and stored locally. By including them here, the explain mode can auto-identify them
+  // without needing to re-query the API, and will display their stored descriptions.
+  const userObjects = getUserCatalogObjects();
+  for (const userObj of userObjects) {
+    // Filter by magnitude threshold
+    if (userObj.magnitude > opts.maxMagnitude) {
+      continue;
+    }
+    
+    // Calculate horizontal coordinates for this object
+    // Use the same method as for stars (simple conversion from RA/Dec)
+    const horizontal = getStarHorizontalCoords(
+      {
+        hr: 0, // User catalog objects don't have HR number
+        name: userObj.name,
+        ra: userObj.ra,
+        dec: userObj.dec,
+        magnitude: userObj.magnitude,
+        spectral: '',
+      },
+      location,
+      date
+    );
+    
+    // Only include if above minimum altitude
+    if (isAboveHorizon(horizontal.altitude, opts.minAltitude)) {
+      const target: FocusTarget = {
+        id: userObj.id,
+        name: userObj.name,
+        type: userObj.type,
+        ra: userObj.ra,
+        dec: userObj.dec,
+        magnitude: userObj.magnitude,
+        info: userObj.info,
+        direction: {
+          azimuth: horizontal.azimuth,
+          altitude: horizontal.altitude,
+          distance: 0,
+        },
       };
       candidates.push(target);
     }

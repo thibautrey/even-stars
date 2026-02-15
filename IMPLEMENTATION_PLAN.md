@@ -398,6 +398,46 @@ Current has basic arrow. Enhance with:
 
 ---
 
+## Phase 5.5: User Catalog Integration with Identify Mode ✅
+
+**Goal**: Leverage the user-discovered object catalog in the identify/explain feature
+
+### Task 5.5.1: Enhance Object Detection with User Catalog ✅
+
+**Problem**: The identify/explain mode could only auto-detect built-in stars and planets. Objects discovered through the find target + LLM feature couldn't be automatically recognized unless the user manually selected them again.
+
+**Solution**: Integrated user catalog into `getCandidateObjects()` function
+
+**Implementation**:
+1. Modified `src/identify/detector.ts`:
+   - Imported `getUserCatalogObjects()` from `userCatalog.ts`
+   - Updated `getCandidateObjects()` to iterate through user catalog objects
+   - User objects are treated identically to built-in stars: horizontal coordinates calculated, magnitude filtered, altitude checked
+   
+2. Full integration chain:
+   - `getCandidateObjects()` → includes user objects ✅
+   - `findNearestObject()` → detects from expanded candidate list ✅
+   - `ExplainModeManager.setCurrentObject()` → calls `getObjectDescription()` ✅
+   - `getObjectDescription()` → already checks user catalog descriptions ✅
+   - Result: Explain mode can auto-identify and display descriptions for user-discovered objects
+
+**Benefits**:
+- User catalog grows organically as user discovers objects
+- No API calls needed for known objects
+- Seamless integration with existing identify/explain flow
+- Descriptions are preserved from LLM discovery
+- Explain mode automatically recognizes previously discovered objects
+
+**Files modified**: 
+- `src/identify/detector.ts` - Added user catalog support to candidate detection
+
+**Known limitations**:
+- User objects must have valid RA/Dec coordinates (provided by LLM)
+- Magnitude filtering uses the same threshold as built-in stars
+- User objects won't be discoverable until they're in the catalog (first discovery via find target)
+
+---
+
 ## Phase 6: Constellation Hints Mode 🆕
 
 **Goal**: Minimal constellation overlay
