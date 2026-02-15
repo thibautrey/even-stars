@@ -33,10 +33,17 @@ export {
   getSelectedModel,
   type OpenAIModel,
 } from './openaiModels';
-export { llmFallbackSearch } from './llmFallback';
+export { llmFallbackSearch, getSystemPrompt } from './llmFallback';
 export {
   getUserCatalogObjects,
   getUserDescription,
   addLLMObjectToCatalog,
   type LLMCelestialObject,
 } from './userCatalog';
+export {
+  createSession,
+  resetSession,
+  sessionInfo,
+  type ConversationSession,
+  type ConversationMessage,
+} from './conversationSession';

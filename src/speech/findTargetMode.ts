@@ -23,7 +23,11 @@ import {
 } from './findTargetOverlay';
 import { getAllSearchableObjects } from '../sky/searchCatalog';
 import type { SearchableObject } from '../types/search';
-import { llmFallbackSearch } from './llmFallback';
+import { llmFallbackSearch, getSystemPrompt } from './llmFallback';
+import {
+  createSession,
+  type ConversationSession,
+} from './conversationSession';
 
 // ============================================================================
 // Types
@@ -49,6 +53,8 @@ export interface FindTargetModeState {
 let modeState: FindTargetModeState = createInitialModeState();
 let onTargetFound: ((target: FocusTarget) => void) | null = null;
 let activeBridge: EvenAppBridge | null = null;
+/** Persistent conversation session for multi-turn LLM interactions. */
+let conversationSession: ConversationSession | null = null;
 
 function createInitialModeState(): FindTargetModeState {
   return {
@@ -82,6 +88,9 @@ export async function activateFindTargetMode(
   onTargetFound = targetFoundCallback;
   activeBridge = bridge;
 
+  // Create a new conversation session for multi-turn context
+  conversationSession = createSession(getSystemPrompt());
+
   // Track usage for hint-hiding logic
   incrementFindTargetUsage();
 
@@ -103,6 +112,7 @@ export async function deactivateFindTargetMode(): Promise<void> {
   modeState.isActive = false;
   modeState.overlay.state = FindTargetOverlayState.Idle;
   onTargetFound = null;
+  conversationSession = null;
 }
 
 /**
@@ -348,10 +358,10 @@ async function matchAndNotify(text: string): Promise<void> {
     return;
   }
 
-  // 2. No local match → ask AI
+  // 2. No local match → ask AI (with conversation session for multi-turn context)
   modeState.overlay.state = FindTargetOverlayState.SearchingAI;
 
-  const result = await llmFallbackSearch(text, activeBridge);
+  const result = await llmFallbackSearch(text, activeBridge, conversationSession);
   // Guard: mode may have been deactivated while the request was in flight
   if (!modeState.isActive) return;
 
