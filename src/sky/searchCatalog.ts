@@ -2,6 +2,7 @@
 
 import type { SearchableObject } from '../types/search';
 import { SearchObjectType } from '../types/search';
+import { getUserCatalogObjects } from '../speech/userCatalog';
 
 /**
  * Bright stars catalog - easily searchable named stars
@@ -92,7 +93,7 @@ export const SEARCHABLE_CONSTELLATIONS: SearchableObject[] = [
 ];
 
 /**
- * Get all searchable objects
+ * Get all searchable objects (built-in + user-discovered via AI)
  */
 export function getAllSearchableObjects(): SearchableObject[] {
   return [
@@ -100,6 +101,7 @@ export function getAllSearchableObjects(): SearchableObject[] {
     ...SEARCHABLE_PLANETS,
     ...SEARCHABLE_DEEPSKY,
     ...SEARCHABLE_CONSTELLATIONS,
+    ...getUserCatalogObjects(),
   ];
 }
 

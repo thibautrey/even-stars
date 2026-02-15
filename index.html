@@ -802,6 +802,39 @@
               </button>
             </div>
           </div>
+
+          <!-- OpenAI Model Selection -->
+          <div class="setting-item">
+            <div>
+              <div class="setting-label">AI Model</div>
+              <div id="setting-model-status" class="setting-hint">Used for AI-powered object identification</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap;">
+              <select
+                id="setting-model-select"
+                style="
+                  background: var(--color-bg-secondary);
+                  border: 1px solid var(--color-border);
+                  border-radius: var(--radius-sm);
+                  color: var(--color-text-primary);
+                  font-size: var(--font-size-sm);
+                  padding: var(--space-4) var(--space-8);
+                  min-width: 180px;
+                  outline: none;
+                  transition: border-color var(--transition-fast);
+                "
+              >
+                <option value="">Loading models…</option>
+              </select>
+              <button id="setting-model-refresh" class="button secondary" style="padding: var(--space-4) var(--space-8); font-size: var(--font-size-xs);">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12"/>
+                  <path d="M3 3v9h9"/>
+                </svg>
+                Refresh
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

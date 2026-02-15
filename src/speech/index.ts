@@ -25,3 +25,17 @@ export {
   processManualText,
   type FindTargetModeState,
 } from './findTargetMode';
+export {
+  fetchModels,
+  getCachedModels,
+  saveSelectedModel,
+  getSelectedModel,
+  type OpenAIModel,
+} from './openaiModels';
+export { llmFallbackSearch } from './llmFallback';
+export {
+  getUserCatalogObjects,
+  getUserDescription,
+  addLLMObjectToCatalog,
+  type LLMCelestialObject,
+} from './userCatalog';

@@ -73,7 +73,24 @@ import {
   renderFindTargetOverlay,
   saveApiKey,
   loadApiKey,
+  fetchModels,
+  getCachedModels,
+  saveSelectedModel,
+  getSelectedModel,
 } from './speech';
+
+import {
+  isTimeMenuOpen,
+  openTimeMenu,
+  closeTimeMenu,
+  timeMenuSelectNext,
+  timeMenuSelectPrev,
+  timeMenuConfirm,
+  getEffectiveDate,
+  renderTimeMenuOverlay,
+  getTimeMenuDisplayLabel,
+  resetTimeMenu,
+} from './time';
 
 // Application state - Simplified for Astronomical Compass
 const appState: CompassState = {
@@ -291,7 +308,80 @@ function initBrowserDisplay(): void {
     });
   }
 
+  // --- OpenAI Model selector ---
+  initModelSelector();
+
   updateBrowserDisplay();
+}
+
+/**
+ * Populate and wire the AI model <select> dropdown in the settings panel.
+ */
+function initModelSelector(): void {
+  const select = document.getElementById('setting-model-select') as HTMLSelectElement | null;
+  const refreshBtn = document.getElementById('setting-model-refresh');
+  const statusEl = document.getElementById('setting-model-status');
+  if (!select) return;
+
+  const currentModel = getSelectedModel();
+
+  /** Render models into the <select> */
+  function renderOptions(models: { id: string }[], selectedId: string): void {
+    select!.innerHTML = '';
+    if (models.length === 0) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'No models found';
+      select!.appendChild(opt);
+      return;
+    }
+    for (const m of models) {
+      const opt = document.createElement('option');
+      opt.value = m.id;
+      opt.textContent = m.id;
+      if (m.id === selectedId) opt.selected = true;
+      select!.appendChild(opt);
+    }
+  }
+
+  // 1. Show cached models immediately (fast)
+  const cached = getCachedModels();
+  if (cached.length > 0) {
+    renderOptions(cached, currentModel);
+    if (statusEl) statusEl.textContent = `Selected: ${currentModel}`;
+  }
+
+  // 2. Fetch fresh list in the background
+  fetchModels(bridge).then((models) => {
+    if (models.length > 0) {
+      renderOptions(models, getSelectedModel());
+      if (statusEl) statusEl.textContent = `Selected: ${getSelectedModel()} (${models.length} models)`;
+    }
+  });
+
+  // Save on change
+  select.addEventListener('change', () => {
+    const id = select.value;
+    if (id) {
+      saveSelectedModel(id);
+      if (statusEl) statusEl.textContent = `Selected: ${id}`;
+      console.log('✓ AI model set to', id);
+    }
+  });
+
+  // Refresh button
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', async () => {
+      if (statusEl) statusEl.textContent = 'Fetching models…';
+      const models = await fetchModels(bridge);
+      if (models.length > 0) {
+        renderOptions(models, getSelectedModel());
+        if (statusEl) statusEl.textContent = `Refreshed (${models.length} models)`;
+      } else {
+        if (statusEl) statusEl.textContent = 'No models found — check API key';
+      }
+    });
+  }
 }
 
 // Menu handling is now simplified - single menu with mode selection
@@ -575,6 +665,7 @@ function normalizeEventType(rawEventType: unknown): OsEventTypeList | undefined 
  * Handle ring single-click.
  * In Find Target mode: starts/stops voice search.
  * In Explain mode: toggles lock on current object.
+ * In Time mode: opens/confirms time menu.
  * In other modes: confirms the active mode selection.
  */
 function handleRingClick(): void {
@@ -595,6 +686,22 @@ function handleRingClick(): void {
     return;
   }
 
+  // Time mode: open time menu or confirm selection
+  if (appState.appMode === AppMode.Time) {
+    if (isTimeMenuOpen()) {
+      const newOffset = timeMenuConfirm();
+      if (newOffset !== null) {
+        console.log(`⏱ Time offset set: ${newOffset}ms (${newOffset / 3600000}h)`);
+      }
+    } else {
+      openTimeMenu();
+      console.log('⏱ Time menu opened');
+    }
+    updateBrowserDisplay();
+    render();
+    return;
+  }
+
   const selectedLabel = getSelectedLabel(menuState);
   console.log(`🔘 Click: confirmed mode "${selectedLabel}" (index: ${menuState.selectedIndex})`);
   // Mode is already applied when scrolling; click is a confirmation.
@@ -605,6 +712,7 @@ function handleRingClick(): void {
 /**
  * Handle ring double-click.
  * In Find Target mode: cancels current voice search.
+ * In Time mode: closes time menu without changing offset.
  * In other modes: no-op placeholder.
  */
 function handleRingDoubleClick(): void {
@@ -617,6 +725,15 @@ function handleRingDoubleClick(): void {
     return;
   }
 
+  // Time mode: close the time menu overlay without applying
+  if (appState.appMode === AppMode.Time && isTimeMenuOpen()) {
+    closeTimeMenu();
+    console.log('🔘🔘 Double-click: closed time menu');
+    updateBrowserDisplay();
+    render();
+    return;
+  }
+
   console.log('🔘🔘 Double-click: no action assigned yet');
 }
 
@@ -624,6 +741,17 @@ function handleRingDoubleClick(): void {
  * Handle menu navigation (next/prev)
  */
 function handleMenuNavigation(direction: 'next' | 'prev'): void {
+  // If time menu is open, navigate within it instead of the main menu
+  if (appState.appMode === AppMode.Time && isTimeMenuOpen()) {
+    if (direction === 'next') {
+      timeMenuSelectNext();
+    } else {
+      timeMenuSelectPrev();
+    }
+    render();
+    return;
+  }
+
   // Navigate the mode selection menu
   if (direction === 'next') {
     selectNextItem(menuState);
@@ -644,6 +772,10 @@ function handleMenuNavigation(direction: 'next' | 'prev'): void {
       if (previousMode === AppMode.ConstellationHints && newMode !== AppMode.ConstellationHints) {
         resetExplainManager();
         currentExplainDisplay = null;
+      }
+      // Close time menu when leaving time mode
+      if (previousMode === AppMode.Time && newMode !== AppMode.Time) {
+        closeTimeMenu();
       }
       // Deactivate find target when leaving that mode
       if (previousMode === AppMode.TargetFinder && newMode !== AppMode.TargetFinder) {
@@ -751,11 +883,13 @@ function render(): void {
   }
 
   // Render sky to offscreen canvas (for glasses)
+  // Use effective date (respects time offset from Time menu)
   renderSkyToBuffer({
     ctx: skyCtx,
     location: appState.location,
     orientation: appState.orientation,
     viewMode: 'Stars' as any, // Temporary - will be refactored in Task 3.3
+    date: getEffectiveDate(),
     selectedStar: null,
     starFilter: 'all' as any,
     constellationFilter: 'all' as any,
@@ -772,6 +906,17 @@ function render(): void {
   // Render find target voice overlay (bottom 1/3)
   if (appState.appMode === AppMode.TargetFinder && isFindTargetActive()) {
     renderFindTargetOverlay(skyCtx, getFindTargetOverlay());
+  }
+
+  // Render time menu overlay (right panel) when open
+  if (appState.appMode === AppMode.Time && isTimeMenuOpen()) {
+    renderTimeMenuOverlay(skyCtx);
+  }
+
+  // Update the Time menu item label to reflect the active time preset
+  const timeItemIndex = menuState.items.findIndex(i => i.id === 'menu-2');
+  if (timeItemIndex >= 0) {
+    menuState.items[timeItemIndex].label = getTimeMenuDisplayLabel();
   }
 
   // Render horizontal menu at the bottom
@@ -860,6 +1005,9 @@ function cleanup(): void {
   // Deactivate find target mode (stops mic if active)
   deactivateFindTargetMode();
 
+  // Reset time menu
+  resetTimeMenu();
+
   // Unsubscribe from events
   if (deviceStatusUnsubscribe) {
     deviceStatusUnsubscribe();
@@ -911,31 +1059,6 @@ function initDevPanelFindTarget(): void {
 
   if (!searchBtn || !textInput) return;
 
-  const doSearch = () => {
-    const text = textInput.value.trim();
-    if (!text) {
-      if (statusDiv) statusDiv.textContent = 'Please enter text first';
-      return;
-    }
-
-    // Ensure Find Target mode is active before processing
-    if (!isFindTargetActive() && bridge) {
-      activateFindTargetMode(bridge, (target) => {
-        appState.focusTarget = target;
-        console.log('🎯 Manual search found target:', target.name);
-        updateBrowserDisplay();
-        render();
-      }).then(() => {
-        processManualText(text);
-        showResult();
-      });
-      return;
-    }
-
-    processManualText(text);
-    showResult();
-  };
-
   const showResult = () => {
     const overlay = getFindTargetOverlay();
     if (overlay.matchedName) {
@@ -946,6 +1069,31 @@ function initDevPanelFindTarget(): void {
       if (resultDiv) resultDiv.style.display = 'none';
       if (statusDiv) statusDiv.textContent = `No match for: "${textInput.value.trim()}"`;
     }
+    updateBrowserDisplay();
+    render();
+  };
+
+  const doSearch = async () => {
+    const text = textInput.value.trim();
+    if (!text) {
+      if (statusDiv) statusDiv.textContent = 'Please enter text first';
+      return;
+    }
+
+    if (statusDiv) statusDiv.textContent = 'Searching…';
+
+    // Ensure Find Target mode is active before processing
+    if (!isFindTargetActive() && bridge) {
+      await activateFindTargetMode(bridge, (target) => {
+        appState.focusTarget = target;
+        console.log('🎯 Manual search found target:', target.name);
+        updateBrowserDisplay();
+        render();
+      });
+    }
+
+    await processManualText(text);
+    showResult();
   };
 
   searchBtn.addEventListener('click', doSearch);

@@ -1,6 +1,8 @@
 // Celestial object descriptions for Explain mode
 // Short, glanceable descriptions for smart glasses auto-scrolling sidebar
 
+import { getUserDescription } from '../speech/userCatalog';
+
 /**
  * Star description entry
  */
@@ -247,10 +249,10 @@ export const PLANET_DESCRIPTIONS: Record<string, CelestialDescription> = {
 
 /**
  * Get description for a celestial object by name
- * Searches stars first, then planets
+ * Searches built-in stars/planets first, then the user-discovered catalog
  */
 export function getObjectDescription(name: string): CelestialDescription | null {
-  return STAR_DESCRIPTIONS[name] || PLANET_DESCRIPTIONS[name] || null;
+  return STAR_DESCRIPTIONS[name] || PLANET_DESCRIPTIONS[name] || getUserDescription(name) || null;
 }
 
 /**

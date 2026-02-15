@@ -18,6 +18,7 @@ import {
 } from './findTargetOverlay';
 import { getAllSearchableObjects } from '../sky/searchCatalog';
 import type { SearchableObject } from '../types/search';
+import { llmFallbackSearch } from './llmFallback';
 
 // ============================================================================
 // Types
@@ -38,6 +39,7 @@ export interface FindTargetModeState {
 
 let modeState: FindTargetModeState = createInitialModeState();
 let onTargetFound: ((target: FocusTarget) => void) | null = null;
+let activeBridge: EvenAppBridge | null = null;
 
 function createInitialModeState(): FindTargetModeState {
   return {
@@ -67,6 +69,7 @@ export async function activateFindTargetMode(
   modeState = createInitialModeState();
   modeState.isActive = true;
   onTargetFound = targetFoundCallback;
+  activeBridge = bridge;
 
   // Check if API key is available
   const hasKey = await hasApiKey(bridge);
@@ -122,6 +125,7 @@ export async function handleFindTargetClick(bridge: EvenAppBridge): Promise<void
       break;
 
     case FindTargetOverlayState.Processing:
+    case FindTargetOverlayState.SearchingAI:
       // Wait for processing to complete — ignore click
       break;
   }
@@ -180,7 +184,7 @@ export function isFindTargetActive(): boolean {
  * This is a shortcut that skips the mic → Whisper step and goes straight
  * to the object-matching / target-lock pipeline.
  */
-export function processManualText(text: string): void {
+export async function processManualText(text: string): Promise<void> {
   if (!modeState.isActive) return;
 
   const trimmed = text.trim();
@@ -190,18 +194,8 @@ export function processManualText(text: string): void {
   modeState.overlay.state = FindTargetOverlayState.Processing;
   modeState.overlay.transcription = trimmed;
 
-  const matched = matchObjectFromText(trimmed);
-  if (matched) {
-    modeState.matchedObject = matched;
-    modeState.overlay.state = FindTargetOverlayState.Matched;
-    modeState.overlay.matchedName = matched.name;
-
-    // Convert to FocusTarget and notify — exactly like finishListening()
-    const target = searchObjectToFocusTarget(matched);
-    onTargetFound?.(target);
-  } else {
-    modeState.overlay.state = FindTargetOverlayState.NoMatch;
-  }
+  // Local catalog first, then LLM fallback
+  await matchAndNotify(trimmed);
 }
 
 // ============================================================================
@@ -256,19 +250,8 @@ async function finishListening(): Promise<void> {
     return;
   }
 
-  // Final match attempt
-  const matched = matchObjectFromText(finalText);
-  if (matched) {
-    modeState.matchedObject = matched;
-    modeState.overlay.state = FindTargetOverlayState.Matched;
-    modeState.overlay.matchedName = matched.name;
-
-    // Convert to FocusTarget and notify
-    const target = searchObjectToFocusTarget(matched);
-    onTargetFound?.(target);
-  } else {
-    modeState.overlay.state = FindTargetOverlayState.NoMatch;
-  }
+  // Final match attempt — local catalog first, then LLM fallback
+  await matchAndNotify(finalText);
 }
 
 /**
@@ -284,6 +267,42 @@ function tryMatchObject(text: string): void {
     // But update the overlay to show what we found
     modeState.matchedObject = matched;
     modeState.overlay.matchedName = matched.name;
+  }
+}
+
+/**
+ * Unified match-then-fallback pipeline used by both finishListening and
+ * processManualText.  Tries the local catalog first; if nothing is found
+ * it queries the OpenAI chat API and persists the result.
+ */
+async function matchAndNotify(text: string): Promise<void> {
+  // 1. Try local catalog
+  const matched = matchObjectFromText(text);
+  if (matched) {
+    modeState.matchedObject = matched;
+    modeState.overlay.state = FindTargetOverlayState.Matched;
+    modeState.overlay.matchedName = matched.name;
+    const target = searchObjectToFocusTarget(matched);
+    onTargetFound?.(target);
+    return;
+  }
+
+  // 2. No local match → ask AI
+  modeState.overlay.state = FindTargetOverlayState.SearchingAI;
+
+  const result = await llmFallbackSearch(text, activeBridge);
+  // Guard: mode may have been deactivated while the request was in flight
+  if (!modeState.isActive) return;
+
+  if (result.success && result.object) {
+    modeState.matchedObject = result.object;
+    modeState.overlay.state = FindTargetOverlayState.Matched;
+    modeState.overlay.matchedName = result.object.name;
+    const target = searchObjectToFocusTarget(result.object);
+    onTargetFound?.(target);
+  } else {
+    modeState.overlay.state = FindTargetOverlayState.NoMatch;
+    modeState.overlay.errorMessage = result.error || 'Not found';
   }
 }
 

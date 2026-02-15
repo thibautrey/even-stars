@@ -50,6 +50,8 @@ export enum FindTargetOverlayState {
   Listening = 'listening',
   /** Sending audio to API */
   Processing = 'processing',
+  /** Local match failed, asking AI to identify the object */
+  SearchingAI = 'searching_ai',
   /** Object matched successfully */
   Matched = 'matched',
   /** No match found */
@@ -108,6 +110,9 @@ export function renderFindTargetOverlay(
       break;
     case FindTargetOverlayState.Processing:
       renderProcessingState(ctx, data.transcription);
+      break;
+    case FindTargetOverlayState.SearchingAI:
+      renderSearchingAIState(ctx, data.transcription);
       break;
     case FindTargetOverlayState.Matched:
       renderMatchedState(ctx, data.transcription, data.matchedName);
@@ -208,6 +213,30 @@ function renderMatchedState(
   ctx.textAlign = 'center';
   ctx.fillText(
     'Click to search again · Double-click to cancel',
+    OVERLAY_X + OVERLAY_WIDTH / 2,
+    OVERLAY_Y + OVERLAY_HEIGHT - PAD_Y - 4,
+  );
+}
+
+function renderSearchingAIState(ctx: CanvasRenderingContext2D, text: string): void {
+  const dotCount = (Math.floor(Date.now() / 500) % 3) + 1;
+  const dots = '.'.repeat(dotCount);
+  renderStatusBadge(ctx, `🤖 ASKING AI${dots}`, COLOR_PROCESSING);
+
+  ctx.font = FONT_TRANSCRIPT;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = COLOR_TEXT;
+
+  if (text) {
+    wrapText(ctx, `"${text}"`, TEXT_AREA_X, TEXT_AREA_Y + 18, TEXT_AREA_WIDTH, 16);
+  }
+
+  ctx.font = FONT_HINT;
+  ctx.fillStyle = COLOR_HINT;
+  ctx.textAlign = 'center';
+  ctx.fillText(
+    'Not in catalog — querying AI...',
     OVERLAY_X + OVERLAY_WIDTH / 2,
     OVERLAY_Y + OVERLAY_HEIGHT - PAD_Y - 4,
   );
