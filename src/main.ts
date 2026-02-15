@@ -70,6 +70,9 @@ const appState: CompassState = {
 // Horizontal menu state
 let menuState: HorizontalMenuState = createMenuState(getMenuItemNames());
 
+// Track the last scroll container index for direction detection
+let lastScrollContainerIndex = 0;
+
 // SDK bridge instance
 let bridge: EvenAppBridge | null = null;
 
@@ -252,7 +255,7 @@ function updateBrowserDisplay(): void {
 async function initGlassesUI(): Promise<void> {
   if (!bridge) return;
 
-  const config = createSimplifiedStartupConfig(appState.menuItems);
+  const config = createSimplifiedStartupConfig();
   console.log('Creating glasses UI with horizontal menu:', JSON.stringify(config.toJson(), null, 2));
   const result = await bridge.createStartUpPageContainer(config);
 
@@ -300,11 +303,13 @@ function setupEventListeners(): void {
   // Listen for UI events
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   evenHubEventUnsubscribe = bridge.onEvenHubEvent((event: any) => {
+    console.log('📨 Raw EvenHub event received:', event);
+    
     // Handle list events from the menu container
-    // This is the primary way to detect menu selection from glasses scroll
+    // The list container captures scroll events based on selectedItemIndex changes
     if (event.listEvent) {
       const listEvent = event.listEvent;
-      console.log('List event from menu container:', listEvent);
+      console.log('📋 List event:', listEvent);
       
       // Convert to JSON if needed
       let eventData = listEvent;
@@ -316,26 +321,29 @@ function setupEventListeners(): void {
         }
       }
       
-      // Get the selected item index from the SDK
-      // This is sent when user scrolls to select a different item
-      const selectedIndex = eventData.currentSelectItemIndex;
+      // Log properties for debugging
+      console.log('📋 List event data:', {
+        currentSelectItemIndex: eventData.currentSelectItemIndex,
+        currentSelectItemName: eventData.currentSelectItemName,
+        containerID: eventData.containerID,
+        eventType: eventData.eventType,
+      });
       
-      if (selectedIndex !== undefined && selectedIndex !== null) {
-        console.log('SDK selected menu index:', selectedIndex);
-        // Sync our menu state with the SDK's selection
-        if (selectedIndex >= 0 && selectedIndex < appState.menuItems.length) {
-          if (selectedIndex !== menuState.selectedIndex) {
-            selectMenuItem(selectedIndex);
-          }
-        }
-      } else {
-        // Fallback: handle direction-based events
-        const eventType = eventData.eventType || eventData.type;
-        const direction = eventData.direction;
+      // Determine scroll direction from index change
+      // The virtual scroll container has 20 items; scrolling changes selectedItemIndex
+      const currentIndex = eventData.currentSelectItemIndex;
+      if (currentIndex !== undefined && currentIndex !== null) {
+        const indexDiff = currentIndex - lastScrollContainerIndex;
+        const direction = indexDiff > 0 ? 'up' : 'down';
         
-        if (eventType === 'next' || direction === 'next' || direction === 'up') {
+        console.log(`📊 Index changed: ${lastScrollContainerIndex} → ${currentIndex} (diff: ${indexDiff}, direction: ${direction})`);
+        lastScrollContainerIndex = currentIndex;
+        
+        if (direction === 'up') {
+          console.log('⬆️ Scroll UP - next menu item');
           handleMenuNavigation('next');
-        } else if (eventType === 'prev' || direction === 'prev' || direction === 'down') {
+        } else if (direction === 'down') {
+          console.log('⬇️ Scroll DOWN - previous menu item');
           handleMenuNavigation('prev');
         }
       }
@@ -343,7 +351,7 @@ function setupEventListeners(): void {
     // Handle system events for scroll/navigation (fallback)
     else if (event.sysEvent) {
       const sysEvent = event.sysEvent;
-      console.log('System event:', sysEvent);
+      console.log('⚙️ System event:', sysEvent);
       
       // Convert to JSON if needed
       let eventData = sysEvent;
@@ -355,11 +363,11 @@ function setupEventListeners(): void {
         }
       }
       
-      // Check for scroll/navigation events - UP/DOWN for menu navigation
+      // Check for scroll/navigation events
       const eventType = eventData.eventType || eventData.type;
       if (eventType === 'scroll' || eventType === 'navigate') {
         const direction = eventData.direction;
-        // UP = next menu item, DOWN = previous menu item (scrolling up goes to next)
+        console.log('⚙️ System scroll direction:', direction);
         if (direction === 'next' || direction === 'up') {
           handleMenuNavigation('next');
         } else if (direction === 'prev' || direction === 'down') {
@@ -367,7 +375,9 @@ function setupEventListeners(): void {
         }
       }
     } else if (event.textEvent) {
-      console.log('Text event:', event.textEvent);
+      console.log('📝 Text event:', event.textEvent);
+    } else {
+      console.log('❓ Unknown event type:', event);
     }
   });
 
@@ -393,8 +403,8 @@ function setupEventListeners(): void {
   });
 
   console.log('✓ Keyboard controls enabled:');
-  console.log('  ↑ (up arrow) = next menu item');
-  console.log('  ↓ (down arrow) = previous menu item');
+  console.log('  ↑ (up arrow) / scroll up = next menu item');
+  console.log('  ↓ (down arrow) / scroll down = previous menu item');
   console.log('  1/2/3 = select by number');
 }
 
@@ -416,7 +426,7 @@ function handleMenuNavigation(direction: 'next' | 'prev'): void {
   if (selectedLabel) {
     const newMode = handleMenuSelect(appState, selectedLabel);
     if (newMode !== null) {
-      console.log(`✓ Menu ${direction}: switched to mode:`, newMode);
+      console.log(`✓ Menu ${direction}: switched to mode:`, newMode, `(index: ${menuState.selectedIndex})`);
       updateBrowserDisplay();
       render();
     }

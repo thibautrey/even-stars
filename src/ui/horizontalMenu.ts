@@ -13,8 +13,10 @@ const MENU_BORDER_RADIUS = 3;
 const MENU_FONT_SIZE = 12;
 const MENU_FONT_FAMILY = 'sans-serif';
 
-// Colors (grayscale for glasses display)
-const COLOR_BORDER = 100;       // Gray border for unselected items
+// Colors (for green/black display)
+const COLOR_BORDER_UNSELECTED = 100;  // Gray border for unselected items
+const COLOR_BORDER_SELECTED = 200;    // Bright green border for selected items
+const COLOR_TEXT_DEFAULT = 255;       // White text
 
 /**
  * Menu item definition
@@ -87,13 +89,6 @@ export function renderHorizontalMenu(
   // Calculate item widths
   const itemWidths = calculateItemWidths(items, width, MENU_ITEM_PADDING);
   
-  // Draw outer border around entire menu
-  ctx.strokeStyle = `rgb(${COLOR_BORDER}, ${COLOR_BORDER}, ${COLOR_BORDER})`;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.roundRect(x, y, width, height, MENU_BORDER_RADIUS);
-  ctx.stroke();
-  
   // Draw each menu item
   let currentX = x + MENU_ITEM_PADDING;
   
@@ -101,37 +96,49 @@ export function renderHorizontalMenu(
     const itemWidth = itemWidths[index] || 100;
     const isSelected = index === selectedIndex;
     
-    // Draw item background
+    // Draw item background with duotone pattern for selected items
     if (isSelected) {
-      // Selected: white background
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.roundRect(currentX, y + 4, itemWidth, height - 8, 2);
-      ctx.fill();
-    } else {
-      // Unselected: transparent/black background, optional border
-      ctx.strokeStyle = `rgb(${COLOR_BORDER}, ${COLOR_BORDER}, ${COLOR_BORDER})`;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.roundRect(currentX, y + 4, itemWidth, height - 8, 2);
-      ctx.stroke();
+      // Selected: subtle dotted/stipple duotone pattern
+      const dotSpacing = 4; // Dots every 4 pixels
+      for (let px = currentX; px < currentX + itemWidth; px += dotSpacing) {
+        for (let py = y + 2; py < y + height - 2; py += dotSpacing) {
+          ctx.fillStyle = `rgb(${COLOR_BORDER_SELECTED}, ${COLOR_BORDER_SELECTED}, ${COLOR_BORDER_SELECTED})`;
+          ctx.fillRect(px, py, 1, 1);
+        }
+      }
     }
     
-    // Draw item text
+    // Draw border around item
+    ctx.strokeStyle = isSelected 
+      ? `rgb(${COLOR_BORDER_SELECTED}, ${COLOR_BORDER_SELECTED}, ${COLOR_BORDER_SELECTED})`
+      : `rgb(${COLOR_BORDER_UNSELECTED}, ${COLOR_BORDER_UNSELECTED}, ${COLOR_BORDER_UNSELECTED})`;
+    ctx.lineWidth = isSelected ? 2 : 1;
+    ctx.beginPath();
+    ctx.roundRect(currentX, y + 2, itemWidth, height - 4, 2);
+    ctx.stroke();
+    
+    // Draw item text with black background
     ctx.font = `${MENU_FONT_SIZE}px ${MENU_FONT_FAMILY}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     
-    if (isSelected) {
-      // Selected: black text
-      ctx.fillStyle = '#000000';
-    } else {
-      // Unselected: white text
-      ctx.fillStyle = '#ffffff';
-    }
-    
     const textX = currentX + itemWidth / 2;
     const textY = y + height / 2;
+    
+    // Measure text width
+    const textWidth = ctx.measureText(item.label).width;
+    const textBoxPadding = 3;
+    const textBoxHeight = MENU_FONT_SIZE + 4;
+    const textBoxY = y + (height - textBoxHeight) / 2;
+    const textBoxX = textX - (textWidth / 2) - textBoxPadding;
+    const textBoxWidth = textWidth + (textBoxPadding * 2);
+    
+    // Draw black background rect for text (only as wide as needed)
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(textBoxX, textBoxY, textBoxWidth, textBoxHeight);
+    
+    // Draw text
+    ctx.fillStyle = `rgb(${COLOR_TEXT_DEFAULT}, ${COLOR_TEXT_DEFAULT}, ${COLOR_TEXT_DEFAULT})`; // White text for all
     ctx.fillText(item.label, textX, textY);
     
     currentX += itemWidth + MENU_ITEM_PADDING;

@@ -27,8 +27,8 @@ export const CANVAS_HEIGHT = 288; // Full screen height
 // Menu dimensions - overlaid at bottom of screen
 // Layout: [8px margin][menu image][8px margin]
 // Width: 8 + 560 + 8 = 576 ✓
-export const MENU_HEIGHT = 40;
-export const MENU_Y_POSITION = 240; // 288 - 40 - 8 (bottom margin)
+export const MENU_HEIGHT = 32;
+export const MENU_Y_POSITION = 248; // 288 - 32 - 8 (bottom margin)
 export const SINGLE_MENU_WIDTH = 560; // Full width for single menu
 
 /**
@@ -80,22 +80,25 @@ export function createInfoTextContainer(): TextContainerProperty {
 }
 
 /**
- * Create a list container for capturing scroll events and menu selection
- * This container has the actual menu items and captures scroll events.
- * The visual appearance is minimal since we render our own menu image.
+ * Create an invisible container for capturing scroll events
+ * This container has 20 virtual items so scroll events can change selectedItemIndex.
+ * We detect direction by tracking index changes and render our own menu image separately.
  */
-export function createMenuEventContainer(itemNames: string[] = ['Identify', 'Find Target', 'Constellations']): ListContainerProperty {
-  // Create items that match our visual menu
+export function createMenuEventContainer(): ListContainerProperty {
+  // Create 20 virtual items to enable scrolling detection
+  // Scrolling up increases index (0→1→2...→19→0), down decreases (1→0→19→...)
+  const virtualItemNames = Array.from({ length: 20 }, (_, i) => `_${i}`);
+  
   const itemContainer = {
-    itemCount: itemNames.length,
-    itemWidth: 0,            // Auto width
-    isItemSelectBorderEn: 1, // Show selection border (subtle indicator)
-    itemName: itemNames,
+    itemCount: 20,
+    itemWidth: 0,
+    isItemSelectBorderEn: 0, // No selection border
+    itemName: virtualItemNames,
     toJson: () => ({
-      itemCount: itemNames.length,
+      itemCount: 20,
       itemWidth: 0,
-      isItemSelectBorderEn: 1,
-      itemName: itemNames,
+      isItemSelectBorderEn: 0,
+      itemName: virtualItemNames,
     }),
   };
 
@@ -104,23 +107,23 @@ export function createMenuEventContainer(itemNames: string[] = ['Identify', 'Fin
     yPosition: MENU_Y_POSITION,
     width: SINGLE_MENU_WIDTH,
     height: MENU_HEIGHT,
-    borderWidth: 1,          // Subtle border to match our rendered menu
-    borderColor: 8,          // White border
-    borderRdaius: 3,
-    paddingLength: 3,
+    borderWidth: 0,          // No border (invisible)
+    borderColor: 0,          // Black
+    borderRdaius: 0,
+    paddingLength: 0,
     containerID: CONTAINER_IDS.MENU_EVENT,
     containerName: 'menu-event',
     itemContainer,
-    isEventCapture: 1,       // Captures scroll/selection events
+    isEventCapture: 1,       // Captures scroll events
     toJson: () => ({
       xPosition: 8,
       yPosition: MENU_Y_POSITION,
       width: SINGLE_MENU_WIDTH,
       height: MENU_HEIGHT,
-      borderWidth: 1,
-      borderColor: 8,
-      borderRdaius: 3,
-      paddingLength: 3,
+      borderWidth: 0,
+      borderColor: 0,
+      borderRdaius: 0,
+      paddingLength: 0,
       containerID: CONTAINER_IDS.MENU_EVENT,
       containerName: 'menu-event',
       itemContainer: itemContainer.toJson(),
@@ -134,16 +137,14 @@ export function createMenuEventContainer(itemNames: string[] = ['Identify', 'Fin
 /**
  * Create simplified startup page config
  * Sky view includes the menu rendered on top
- * Plus a list container for event capture and selection
+ * Plus an invisible list container for capturing scroll events
  */
-export function createSimplifiedStartupConfig(
-  menuItems: string[] = ['Identify', 'Find Target', 'Constellations']
-): CreateStartUpPageContainer {
+export function createSimplifiedStartupConfig(): CreateStartUpPageContainer {
   const config: CreateStartUpPageContainer = {
-    containerTotalNum: 3, // Sky view + text info + menu event container
+    containerTotalNum: 3, // Sky view + text info + event capture container
     imageObject: [createSkyViewContainer()],
     textObject: [createInfoTextContainer()],
-    listObject: [createMenuEventContainer(menuItems)], // Captures scroll events
+    listObject: [createMenuEventContainer()], // Captures scroll events
     toJson: function() {
       return {
         containerTotalNum: 3,
