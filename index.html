@@ -426,6 +426,179 @@
       color: var(--color-text-tertiary);
     }
 
+    .footer-links {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-16);
+      margin-top: var(--space-8);
+    }
+
+    .footer-link {
+      font-size: var(--font-size-xs);
+      color: var(--color-text-tertiary);
+      background: none;
+      border: none;
+      cursor: pointer;
+      text-decoration: underline;
+      padding: var(--space-4);
+      transition: color var(--transition-fast);
+    }
+
+    .footer-link:hover {
+      color: var(--color-accent-primary);
+    }
+
+    /* Developer Panel */
+    .dev-panel {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--color-surface);
+      border-top: 1px solid var(--color-border);
+      padding: var(--space-16);
+      z-index: 100;
+      max-height: 50vh;
+      overflow-y: auto;
+    }
+
+    .dev-panel.visible {
+      display: block;
+    }
+
+    .dev-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--space-12);
+    }
+
+    .dev-panel-title {
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      color: var(--color-text-primary);
+    }
+
+    .dev-panel-close {
+      width: 28px;
+      height: 28px;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--color-bg-tertiary);
+      border: 1px solid var(--color-border);
+      color: var(--color-text-primary);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .dev-panel-close:hover {
+      background: var(--color-error);
+      border-color: var(--color-error);
+    }
+
+    .dev-panel-content {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-16);
+    }
+
+    .dev-section {
+      background: var(--color-bg-secondary);
+      border-radius: var(--radius-md);
+      padding: var(--space-12);
+      border: 1px solid var(--color-border-subtle);
+    }
+
+    .dev-section-title {
+      font-size: var(--font-size-xs);
+      font-weight: 600;
+      color: var(--color-text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      margin-bottom: var(--space-12);
+    }
+
+    .dev-button-row {
+      display: flex;
+      gap: var(--space-8);
+      flex-wrap: wrap;
+    }
+
+    .dev-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-8);
+      padding: var(--space-10) var(--space-16);
+      border-radius: var(--radius-md);
+      font-family: inherit;
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all var(--transition-fast);
+      background: var(--color-accent-primary);
+      color: white;
+    }
+
+    .dev-button:hover {
+      background: var(--color-accent-secondary);
+    }
+
+    .dev-button:active {
+      transform: scale(0.96);
+    }
+
+    .dev-button.secondary {
+      background: var(--color-bg-tertiary);
+      color: var(--color-text-primary);
+      border: 1px solid var(--color-border);
+    }
+
+    .dev-button.secondary:hover {
+      background: var(--color-border);
+    }
+
+    .dev-log {
+      background: var(--color-bg-primary);
+      border-radius: var(--radius-sm);
+      padding: var(--space-12);
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: var(--font-size-xs);
+      color: var(--color-text-secondary);
+      min-height: 80px;
+      max-height: 120px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .dev-log:empty::before {
+      content: 'Events will appear here...';
+      color: var(--color-text-tertiary);
+      font-style: italic;
+    }
+
+    /* Dev panel overlay backdrop */
+    .dev-panel-backdrop {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 99;
+    }
+
+    .dev-panel-backdrop.visible {
+      display: block;
+    }
+
     /* Target Pill */
     .target-pill {
       display: inline-flex;
@@ -600,9 +773,154 @@
         </svg>
         Even Stars v1.0
       </p>
+      <div class="footer-links">
+        <button id="dev-panel-toggle" class="footer-link">Developer panel</button>
+      </div>
     </footer>
+  </div>
+
+  <!-- Developer Panel Backdrop -->
+  <div id="dev-panel-backdrop" class="dev-panel-backdrop"></div>
+
+  <!-- Developer Panel -->
+  <div id="dev-panel" class="dev-panel">
+    <div class="dev-panel-header">
+      <span class="dev-panel-title">Developer Panel</span>
+      <button id="dev-panel-close" class="dev-panel-close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="dev-panel-content">
+      <div class="dev-section">
+        <div class="dev-section-title">Simulate Events</div>
+        <div class="dev-button-row">
+          <button id="dev-simulate-click" class="dev-button">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <circle cx="12" cy="12" r="1"/>
+            </svg>
+            Simulate Click
+          </button>
+          <button id="dev-simulate-double-click" class="dev-button secondary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            Simulate Double Click
+          </button>
+        </div>
+      </div>
+      <div class="dev-section">
+        <div class="dev-section-title">Event Log</div>
+        <div id="dev-event-log" class="dev-log"></div>
+      </div>
+    </div>
   </div>
   
   <script type="module" src="/src/main.ts"></script>
+  <script>
+    // Developer Panel Functionality
+    (function() {
+      const devPanel = document.getElementById('dev-panel');
+      const devPanelBackdrop = document.getElementById('dev-panel-backdrop');
+      const devPanelToggle = document.getElementById('dev-panel-toggle');
+      const devPanelClose = document.getElementById('dev-panel-close');
+      const devSimulateClick = document.getElementById('dev-simulate-click');
+      const devSimulateDoubleClick = document.getElementById('dev-simulate-double-click');
+      const devEventLog = document.getElementById('dev-event-log');
+
+      function openDevPanel() {
+        devPanel.classList.add('visible');
+        devPanelBackdrop.classList.add('visible');
+      }
+
+      function closeDevPanel() {
+        devPanel.classList.remove('visible');
+        devPanelBackdrop.classList.remove('visible');
+      }
+
+      function logEvent(message) {
+        const timestamp = new Date().toLocaleTimeString();
+        const logEntry = `[${timestamp}] ${message}`;
+        if (devEventLog.textContent === 'Events will appear here...') {
+          devEventLog.textContent = logEntry;
+        } else {
+          devEventLog.textContent = logEntry + '\n' + devEventLog.textContent;
+        }
+      }
+
+      // Toggle panel
+      devPanelToggle.addEventListener('click', openDevPanel);
+      devPanelClose.addEventListener('click', closeDevPanel);
+      devPanelBackdrop.addEventListener('click', closeDevPanel);
+
+      // Simulate click event
+      devSimulateClick.addEventListener('click', function() {
+        // Dispatch a simulated click event
+        const simulatedEvent = new CustomEvent('simulatedClick', {
+          detail: { source: 'developer-panel', timestamp: Date.now() },
+          bubbles: true,
+          cancelable: true
+        });
+        document.dispatchEvent(simulatedEvent);
+        
+        logEvent('Click event dispatched');
+        
+        // Also trigger a standard click on the body to simulate user interaction
+        const clickEvent = new MouseEvent('click', {
+          bubbles: true,
+          cancelable: true,
+          clientX: window.innerWidth / 2,
+          clientY: window.innerHeight / 2
+        });
+        document.body.dispatchEvent(clickEvent);
+      });
+
+      // Simulate double click event
+      devSimulateDoubleClick.addEventListener('click', function() {
+        // Dispatch a simulated double-click event
+        const simulatedEvent = new CustomEvent('simulatedDoubleClick', {
+          detail: { source: 'developer-panel', timestamp: Date.now() },
+          bubbles: true,
+          cancelable: true
+        });
+        document.dispatchEvent(simulatedEvent);
+        
+        logEvent('Double click event dispatched');
+        
+        // Also trigger a standard dblclick on the body
+        const dblClickEvent = new MouseEvent('dblclick', {
+          bubbles: true,
+          cancelable: true,
+          clientX: window.innerWidth / 2,
+          clientY: window.innerHeight / 2
+        });
+        document.body.dispatchEvent(dblClickEvent);
+      });
+
+      // Listen for the simulated events (example handlers)
+      document.addEventListener('simulatedClick', function(e) {
+        console.log('Simulated click received:', e.detail);
+      });
+
+      document.addEventListener('simulatedDoubleClick', function(e) {
+        console.log('Simulated double click received:', e.detail);
+      });
+
+      // Log actual click/dblclick events for demonstration
+      document.body.addEventListener('click', function(e) {
+        if (e.target.closest('.dev-panel') || e.target.closest('#dev-panel-toggle')) return;
+        logEvent(`Body click at (${Math.round(e.clientX)}, ${Math.round(e.clientY)})`);
+      });
+
+      document.body.addEventListener('dblclick', function(e) {
+        if (e.target.closest('.dev-panel') || e.target.closest('#dev-panel-toggle')) return;
+        logEvent(`Body double-click at (${Math.round(e.clientX)}, ${Math.round(e.clientY)})`);
+      });
+    })();
+  </script>
 </body>
 </html>

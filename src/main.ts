@@ -21,15 +21,20 @@ import {
 
 import { 
   createSimplifiedStartupConfig,
-  createSimplifiedRebuildConfig,
   CONTAINER_IDS,
-} from './ui/containers';
-
-import {
   getMenuItemNames,
   handleMenuSelect,
-  cycleMode,
-} from './ui/simpleMenu';
+  updateInfoPanel,
+  formatForSDK,
+  type InfoPanelContent,
+  // Horizontal menu
+  renderHorizontalMenu,
+  createMenuState,
+  selectNextItem,
+  selectPreviousItem,
+  getSelectedLabel,
+  type HorizontalMenuState,
+} from './ui';
 
 import {
   getCurrentPosition,
@@ -46,6 +51,10 @@ import {
   formatOrientation,
 } from './sensors/gyroscope';
 
+import {
+  updateIdentifyMode,
+} from './identify';
+
 // Application state - Simplified for Astronomical Compass
 const appState: CompassState = {
   isConnected: false,
@@ -57,6 +66,9 @@ const appState: CompassState = {
   menuItems: getMenuItemNames(),
   selectedMenuIndex: 0,
 };
+
+// Horizontal menu state
+let menuState: HorizontalMenuState = createMenuState(getMenuItemNames());
 
 // SDK bridge instance
 let bridge: EvenAppBridge | null = null;
@@ -127,6 +139,7 @@ async function init(): Promise<void> {
   
   console.log('Even Stars initialized. Current mode:', appState.appMode);
   console.log('Available modes:', appState.menuItems);
+  console.log('Use → / ← arrow keys or scroll to navigate menu');
 }
 
 /**
@@ -155,11 +168,7 @@ function initBrowserDisplay(): void {
   const modeCycleButton = document.getElementById('mode-cycle-btn');
   if (modeCycleButton) {
     modeCycleButton.addEventListener('click', () => {
-      const newMode = cycleMode(appState);
-      console.log('Mode cycled to:', newMode);
-      updateMenuDisplay();
-      updateBrowserDisplay();
-      render();
+      handleMenuNavigation('next');
     });
   }
 
@@ -244,7 +253,7 @@ async function initGlassesUI(): Promise<void> {
   if (!bridge) return;
 
   const config = createSimplifiedStartupConfig(appState.menuItems);
-  console.log('Creating glasses UI with simplified config:', JSON.stringify(config.toJson(), null, 2));
+  console.log('Creating glasses UI with horizontal menu:', JSON.stringify(config.toJson(), null, 2));
   const result = await bridge.createStartUpPageContainer(config);
 
   switch (result) {
@@ -291,141 +300,146 @@ function setupEventListeners(): void {
   // Listen for UI events
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   evenHubEventUnsubscribe = bridge.onEvenHubEvent((event: any) => {
-    // Handle list events - SDK returns protobuf objects that need special handling
+    // Handle list events from the menu container
+    // This is the primary way to detect menu selection from glasses scroll
     if (event.listEvent) {
       const listEvent = event.listEvent;
+      console.log('List event from menu container:', listEvent);
       
-      // Try to extract selection data from the SDK event
-      let itemName = listEvent.currentSelectItemName;
-      let itemIndex = listEvent.currentSelectItemIndex;
-      const containerID = listEvent.containerID;
-      
-      // Try toJson() conversion if direct access didn't work
-      if ((!itemName || itemIndex === undefined) && typeof listEvent.toJson === 'function') {
+      // Convert to JSON if needed
+      let eventData = listEvent;
+      if (typeof listEvent.toJson === 'function') {
         try {
-          const jsonData = listEvent.toJson();
-          itemName = itemName || jsonData?.currentSelectItemName;
-          itemIndex = itemIndex !== undefined ? itemIndex : jsonData?.currentSelectItemIndex;
+          eventData = listEvent.toJson();
         } catch (e) {
-          // Ignore conversion error
+          // Use original
         }
       }
       
-      // Log what we received from the SDK
-      const hasName = itemName !== undefined && itemName !== null;
-      const hasIndex = itemIndex !== undefined && itemIndex !== null;
+      // Get the selected item index from the SDK
+      // This is sent when user scrolls to select a different item
+      const selectedIndex = eventData.currentSelectItemIndex;
       
-      if (hasName) {
-        console.log('✓ SDK event: received itemName =', itemName);
-      } else if (hasIndex) {
-        console.log('✓ SDK event: received itemIndex =', itemIndex);
+      if (selectedIndex !== undefined && selectedIndex !== null) {
+        console.log('SDK selected menu index:', selectedIndex);
+        // Sync our menu state with the SDK's selection
+        if (selectedIndex >= 0 && selectedIndex < appState.menuItems.length) {
+          if (selectedIndex !== menuState.selectedIndex) {
+            selectMenuItem(selectedIndex);
+          }
+        }
       } else {
-        console.log('⚠️  SDK event: missing both itemName and itemIndex');
+        // Fallback: handle direction-based events
+        const eventType = eventData.eventType || eventData.type;
+        const direction = eventData.direction;
+        
+        if (eventType === 'next' || direction === 'next' || direction === 'up') {
+          handleMenuNavigation('next');
+        } else if (eventType === 'prev' || direction === 'prev' || direction === 'down') {
+          handleMenuNavigation('prev');
+        }
       }
+    }
+    // Handle system events for scroll/navigation (fallback)
+    else if (event.sysEvent) {
+      const sysEvent = event.sysEvent;
+      console.log('System event:', sysEvent);
       
-      // If we have an index but no name, resolve the name from our menu items
-      if (itemIndex !== undefined && !itemName && containerID === CONTAINER_IDS.MENU) {
-        if (itemIndex >= 0 && itemIndex < appState.menuItems.length) {
-          itemName = appState.menuItems[itemIndex];
-          console.log('→ Resolved: index', itemIndex, '=', itemName);
+      // Convert to JSON if needed
+      let eventData = sysEvent;
+      if (typeof sysEvent.toJson === 'function') {
+        try {
+          eventData = sysEvent.toJson();
+        } catch (e) {
+          // Use original
         }
       }
       
-      handleMenuEvent(itemName, containerID);
+      // Check for scroll/navigation events - UP/DOWN for menu navigation
+      const eventType = eventData.eventType || eventData.type;
+      if (eventType === 'scroll' || eventType === 'navigate') {
+        const direction = eventData.direction;
+        // UP = next menu item, DOWN = previous menu item (scrolling up goes to next)
+        if (direction === 'next' || direction === 'up') {
+          handleMenuNavigation('next');
+        } else if (direction === 'prev' || direction === 'down') {
+          handleMenuNavigation('prev');
+        }
+      }
     } else if (event.textEvent) {
       console.log('Text event:', event.textEvent);
-    } else if (event.sysEvent) {
-      console.log('System event:', event.sysEvent);
     }
   });
 
-  // Setup keyboard controls for menu navigation (for testing/simulator)
-  // This is a temporary solution while SDK event data is being debugged
+  // Setup keyboard controls for menu navigation
+  // UP/DOWN arrows control the menu (matching glasses scroll gesture)
   window.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'ArrowRight') {
+    if (e.key === 'ArrowUp') {
       e.preventDefault();
-      console.log('→ Key pressed - cycling to next mode');
-      cycleMode(appState);
-      updateBrowserDisplay();
-      render();
-    } else if (e.key === 'ArrowLeft') {
+      console.log('↑ Key pressed - next menu item');
+      handleMenuNavigation('next');
+    } else if (e.key === 'ArrowDown') {
       e.preventDefault();
-      console.log('← Key pressed - cycling to previous mode');
-      const currentIndex = appState.selectedMenuIndex;
-      const newIndex = (currentIndex - 1 + appState.menuItems.length) % appState.menuItems.length;
-      const itemName = appState.menuItems[newIndex];
-      handleMenuEvent(itemName, CONTAINER_IDS.MENU);
+      console.log('↓ Key pressed - previous menu item');
+      handleMenuNavigation('prev');
     } else if (e.key >= '1' && e.key <= '9') {
       const index = parseInt(e.key) - 1;
       if (index >= 0 && index < appState.menuItems.length) {
         e.preventDefault();
-        const itemName = appState.menuItems[index];
-        console.log(`Keyboard: Selecting menu item ${index + 1}: "${itemName}"`);
-        handleMenuEvent(itemName, CONTAINER_IDS.MENU);
+        console.log(`Keyboard: Selecting menu item ${index + 1}: "${appState.menuItems[index]}"`);
+        selectMenuItem(index);
       }
     }
   });
 
-  console.log('✓ Keyboard controls enabled (for testing):');
-  console.log('  → (right arrow) = next mode');
-  console.log('  ← (left arrow) = previous mode');
+  console.log('✓ Keyboard controls enabled:');
+  console.log('  ↑ (up arrow) = next menu item');
+  console.log('  ↓ (down arrow) = previous menu item');
   console.log('  1/2/3 = select by number');
 }
 
 /**
- * Handle menu selection events from glasses
- * Simplified single-menu system
+ * Handle menu navigation (next/prev)
  */
-function handleMenuEvent(itemName: string | undefined, containerID?: number): void {
-  console.log('handleMenuEvent called:', { itemName, containerID, menuItems: appState.menuItems });
-  
-  if (!itemName) {
-    console.warn('⚠️  Menu event received but itemName is undefined', { containerID });
-    console.warn('📋 Available menu items:', appState.menuItems);
-    console.log('💡 Tip: Use keyboard controls to test menu (→ ← 1 2 3 keys)');
-    console.log('    Or call handleMenuByIndex(0/1/2) from console');
-    return;
-  }
-
-  // Validate that the item name is in our menu
-  if (!appState.menuItems.includes(itemName)) {
-    console.warn('❌ Menu item not recognized:', itemName, 'from items:', appState.menuItems);
-    return;
-  }
-
-  console.log('✓ Menu selected:', itemName);
-
-  const newMode = handleMenuSelect(appState, itemName);
-  if (newMode !== null) {
-    console.log('✓ Switched to mode:', newMode);
-    updateBrowserDisplay();
-    render();
+function handleMenuNavigation(direction: 'next' | 'prev'): void {
+  if (direction === 'next') {
+    selectNextItem(menuState);
   } else {
-    console.warn('❌ Unknown menu item:', itemName);
+    selectPreviousItem(menuState);
+  }
+  
+  // Update app state to match
+  appState.selectedMenuIndex = menuState.selectedIndex;
+  
+  // Apply the selection (change mode)
+  const selectedLabel = getSelectedLabel(menuState);
+  if (selectedLabel) {
+    const newMode = handleMenuSelect(appState, selectedLabel);
+    if (newMode !== null) {
+      console.log(`✓ Menu ${direction}: switched to mode:`, newMode);
+      updateBrowserDisplay();
+      render();
+    }
   }
 }
 
 /**
- * Update the glasses menu display
- * Simplified single-menu layout
+ * Select a specific menu item by index
  */
-async function updateMenuDisplay(): Promise<void> {
-  if (!bridge || !appState.isConnected) return;
-  
-  console.log('Rebuilding menu with items:', appState.menuItems, 'Current mode:', appState.appMode);
-  
-  try {
-    const config = createSimplifiedRebuildConfig(appState.menuItems);
+function selectMenuItem(index: number): void {
+  if (index >= 0 && index < menuState.items.length) {
+    menuState.selectedIndex = index;
+    appState.selectedMenuIndex = index;
     
-    const success = await bridge.rebuildPageContainer(config);
-    
-    if (success) {
-      console.log('Menu rebuilt successfully');
-    } else {
-      console.error('Failed to rebuild menu');
+    const selectedLabel = getSelectedLabel(menuState);
+    if (selectedLabel) {
+      const newMode = handleMenuSelect(appState, selectedLabel);
+      if (newMode !== null) {
+        console.log('✓ Menu item selected:', newMode);
+        updateBrowserDisplay();
+        render();
+      }
     }
-  } catch (error) {
-    console.error('Error updating menu display:', error);
   }
 }
 
@@ -462,11 +476,25 @@ function stopRenderLoop(): void {
   }
 }
 
+// Current info panel content for display
+let currentInfoContent: InfoPanelContent | null = null;
+
 /**
  * Render the sky to glasses
  */
 function render(): void {
   if (!skyCtx || !appState.location) return;
+
+  // Update Identify mode logic when in Identify mode
+  if (appState.appMode === AppMode.Identify) {
+    const stateChanged = updateIdentifyMode(appState);
+    if (stateChanged) {
+      updateBrowserDisplay();
+    }
+  }
+
+  // Update info panel content
+  currentInfoContent = updateInfoPanel(appState);
 
   // Render sky to offscreen canvas (for glasses)
   // TODO: Update renderSkyToBuffer to accept CompassState
@@ -483,19 +511,45 @@ function render(): void {
     finderTarget: appState.focusTarget as any,
   });
 
-  // Update glasses display
+  // Render horizontal menu at the bottom
+  renderHorizontalMenu(skyCtx, menuState);
+
+  // Update glasses display (image + text)
   updateGlassesDisplay();
 }
+
+// Track last text content to avoid redundant updates
+let lastTextContent: string = '';
 
 /**
  * Update the glasses display with current sky view
  */
 async function updateGlassesDisplay(): Promise<void> {
-  if (!bridge || !appState.isConnected || imageUpdatePending || !skyCtx) {
-    if (!bridge) console.log('No bridge');
-    if (!appState.isConnected) console.log('Not connected');
-    if (imageUpdatePending) console.log('Update pending');
-    if (!skyCtx) console.log('No sky context');
+  if (!bridge || !appState.isConnected || !skyCtx) {
+    return;
+  }
+
+  // Update text container first (lightweight)
+  try {
+    const textContent = formatForSDK(currentInfoContent);
+    
+    // Only send text update if content changed
+    if (textContent !== lastTextContent) {
+      const { TextContainerUpgrade } = await import('@evenrealities/even_hub_sdk');
+      const textUpdate = TextContainerUpgrade.fromJson({
+        containerID: CONTAINER_IDS.INFO_TEXT,
+        content: textContent,
+      });
+      
+      await bridge.textContainerUpgrade(textUpdate);
+      lastTextContent = textContent;
+    }
+  } catch (error) {
+    console.error('Error updating text display:', error);
+  }
+
+  // Skip image update if one is pending
+  if (imageUpdatePending) {
     return;
   }
 
@@ -559,32 +613,23 @@ function cleanup(): void {
 // Handle page unload
 window.addEventListener('beforeunload', cleanup);
 
-// Expose menu functions to window for console testing
-(window as unknown as Record<string, unknown>).handleMenuEvent = handleMenuEvent;
-(window as unknown as Record<string, unknown>).handleMenuByIndex = (index: number) => {
-  if (index >= 0 && index < appState.menuItems.length) {
-    const itemName = appState.menuItems[index];
-    console.log(`Testing menu selection: index ${index} → "${itemName}"`);
-    handleMenuEvent(itemName, CONTAINER_IDS.MENU);
-  } else {
-    console.error(`Invalid menu index: ${index}, valid range: 0-${appState.menuItems.length - 1}`);
-    console.log('Available items:', appState.menuItems);
-  }
-};
+// Expose functions to window for console testing
+(window as unknown as Record<string, unknown>).selectMenuItem = selectMenuItem;
+(window as unknown as Record<string, unknown>).handleMenuNavigation = handleMenuNavigation;
 (window as unknown as Record<string, unknown>).cycleMode = () => {
-  const newMode = cycleMode(appState);
-  console.log('Mode cycled to:', newMode);
-  updateBrowserDisplay();
-  render();
+  handleMenuNavigation('next');
 };
 (window as unknown as Record<string, unknown>).appState = appState;
+(window as unknown as Record<string, unknown>).menuState = menuState;
 (window as unknown as Record<string, unknown>).menuDebug = () => {
   console.log('=== Menu Debug Info ===');
   console.log('Current app mode:', appState.appMode);
   console.log('Menu items:', appState.menuItems);
   console.log('Selected index:', appState.selectedMenuIndex);
+  console.log('Menu state:', menuState);
   console.log('Container IDs:', CONTAINER_IDS);
-  console.log('To test menu selection by index, call: handleMenuByIndex(0), handleMenuByIndex(1), handleMenuByIndex(2)');
+  console.log('To test menu selection by index, call: selectMenuItem(0), selectMenuItem(1), selectMenuItem(2)');
+  console.log('To navigate menu, call: handleMenuNavigation("next") or handleMenuNavigation("prev")');
 };
 
 // Start the application

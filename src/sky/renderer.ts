@@ -830,7 +830,7 @@ function renderInfoOverlay(
   
   ctx.font = '8px monospace';
   ctx.textAlign = 'left';
-  ctx.textBaseline = 'bottom';
+  ctx.textBaseline = 'top'; // Changed to top for top-left positioning
   ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
   
   let infoText = `${cardinal} ${orientation.azimuth.toFixed(0)}°`;
@@ -843,7 +843,8 @@ function renderInfoOverlay(
     if (visibleDeepSky > 0) infoText += ` ${visibleDeepSky} DSO`;
   }
   
-  ctx.fillText(infoText, 5, CANVAS_HEIGHT - 5);
+  // Position at top left corner (was bottom left)
+  ctx.fillText(infoText, 5, 5);
 }
 
 /**

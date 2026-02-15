@@ -156,29 +156,37 @@ Created new `CompassState` interface replacing `ViewMode`-centric state:
 
 **Goal**: Implement "Identify what I'm looking at" - the primary compass feature
 
-### Task 2.1: Create Object Detection Engine
+### Task 2.1: Create Object Detection Engine ✅
 ```typescript
 // src/identify/detector.ts
 export function findNearestObject(
   orientation: HeadOrientation,
   location: GeoLocation,
-  candidates: CatalogObject[],
-  options: {
-    fovHorizontal: number;
-    fovVertical: number;
-    minAltitude: number;
-  }
+  options: Partial<DetectionOptions>
 ): IdentifiedObject | null;
 
 export function calculateConfidence(
-  object: CatalogObject,
-  offset: { deltaAz: number; deltaAlt: number }
+  angularDistance: number,
+  maxDistance: number
 ): number; // 0-1 confidence score
 ```
 
-**New file**: `src/identify/detector.ts`
+**New files**: 
+- `src/identify/detector.ts` - Core detection engine
+- `src/identify/index.ts` - Public API exports
 
-### Task 2.2: Implement Identify Logic
+**Features implemented**:
+- `findNearestObject()` - Finds the nearest bright object to current view direction
+- `findObjectsInView()` - Returns all objects within FOV, sorted by distance
+- `getCandidateObjects()` - Filters visible objects by magnitude and altitude
+- `calculateConfidence()` - Calculates confidence score (0-1) based on angular distance
+- `formatIdentificationText()` - Formats object info for display
+- `isConfidentIdentification()` - Checks if confidence exceeds threshold
+- `sphericalDistance()` - Haversine formula for accurate angular distance
+- Supports stars (from BRIGHT_STARS catalog) and planets
+- Configurable FOV, magnitude limit, altitude threshold, and max identification distance
+
+### Task 2.2: Implement Identify Logic ✅
 - Query visible objects based on head orientation
 - Calculate angular distance to each
 - Return nearest object with confidence score
@@ -190,7 +198,21 @@ export function calculateConfidence(
 3. Return closest if within FOV, null otherwise
 4. Confidence = 1 - (angular_distance / max_distance)
 
-### Task 2.3: Add Text-Based Info Panel
+**New file**: `src/identify/identifyMode.ts`
+
+**Features implemented**:
+- `IdentifyModeManager` class - State machine for identification process
+  - States: Idle → Scanning → Identified → Lost → Idle
+  - Sustained confidence tracking (requires multiple consecutive confident reads)
+  - Lost timeout (maintains "Lost" state briefly before resetting)
+  - Throttling (configurable update interval)
+- `IdentifyState` enum: Idle, Scanning, Identified, Lost
+- `IdentifyModeConfig` - Configuration for behavior tuning
+- `updateIdentifyMode()` - Main integration point with `CompassState`
+- Global singleton pattern via `getIdentifyManager()` for app-wide state
+- Automatic state transitions with hysteresis to prevent flickering
+
+### Task 2.3: Add Text-Based Info Panel ✅
 Replace dense sky rendering with text overlay:
 ```
 ┌─────────────────────────┐
@@ -199,7 +221,25 @@ Replace dense sky rendering with text overlay:
 └─────────────────────────┘
 ```
 
-**Files to modify**: `src/ui/infoPanel.ts` (new)
+**New files**: 
+- `src/ui/infoPanel.ts` - Info panel manager and rendering
+- `src/ui/index.ts` - UI module exports
+
+**Modified files**:
+- `src/ui/containers.ts` - Added `createInfoTextContainer()` and updated `createSimplifiedStartupConfig()` to include text container
+- `src/main.ts` - Integrated info panel updates into render loop and glasses display update
+
+**Features implemented**:
+- `InfoPanelManager` class - Manages text content for different app modes
+  - `updateFromAppState()` - Gets appropriate content based on current app mode
+  - `renderToCanvas()` - Renders panel to browser companion display
+  - Supports all modes: Identify, TargetFinder, ConstellationHints
+- `InfoPanelState` enum: Idle, Scanning, Identified, Lost, TargetFinder
+- `InfoPanelContent` interface: primary, secondary, tertiary text lines
+- `updateInfoPanel()` - Convenience function for main loop
+- `formatForSDK()` - Converts content to SDK text format
+- SDK integration via `textContainerUpgrade` for glasses display
+- Automatic text update throttling (only sends when content changes)
 
 ---
 
@@ -411,9 +451,9 @@ Use device status to pause updates when glasses not worn.
 4. ✅ **Task 4.2**: Simplify menu to single selector
 
 ## Week 2: Identify Mode
-5. 🆕 **Task 2.1**: Create object detection engine
-6. 🆕 **Task 2.2**: Implement identify logic
-7. 🆕 **Task 2.3**: Add text info panel
+5. ✅ **Task 2.1**: Create object detection engine
+6. ✅ **Task 2.2**: Implement identify logic
+7. ✅ **Task 2.3**: Add text info panel
 
 ## Week 3: Rendering Refactor
 8. 🆕 **Task 3.1**: Create text renderer

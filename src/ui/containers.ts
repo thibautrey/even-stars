@@ -1,45 +1,39 @@
 // UI Container definitions for Even glasses display
 
 import type {
-  ListContainerProperty,
   ImageContainerProperty,
+  TextContainerProperty,
+  ListContainerProperty,
   CreateStartUpPageContainer,
 } from '@evenrealities/even_hub_sdk';
 
-import { ActiveMenu } from '../types';
-
 // Container IDs
-// Simplified layout: Main view (image/text) + Single menu
+// Layout: Main sky view (with menu rendered on top) + Info text + Event capture container
 export const CONTAINER_IDS = {
-  SKY_VIEW: 1,      // Main view area (image or text)
-  INFO_TEXT: 2,     // Text info container (for text-first UI)
-  MENU: 3,          // Single mode selector menu
-  // Legacy IDs (for backward compatibility during migration)
-  LEFT_MENU: 3,
-  RIGHT_MENU: 4,
+  SKY_VIEW: 1,      // Main view area (sky + menu rendered together)
+  INFO_TEXT: 2,     // Text info container
+  MENU_EVENT: 3,    // Invisible list container for capturing scroll events
 } as const;
 
 // Glasses display dimensions
 export const GLASSES_WIDTH = 576;
 export const GLASSES_HEIGHT = 288;
 
-// Image container takes full width, leaves room for menus at bottom
+// Sky chart takes full screen size (576x288)
+// Menu is rendered on top of the sky chart at the bottom
 export const CANVAS_WIDTH = 576;
-export const CANVAS_HEIGHT = 232; // 288 - 56 for menu area (menu + padding)
+export const CANVAS_HEIGHT = 288; // Full screen height
 
-// Menu dimensions - must fit within 576x288
-// Simplified layout: [8px margin][single menu][8px margin]
+// Menu dimensions - overlaid at bottom of screen
+// Layout: [8px margin][menu image][8px margin]
 // Width: 8 + 560 + 8 = 576 ✓
 export const MENU_HEIGHT = 40;
 export const MENU_Y_POSITION = 240; // 288 - 40 - 8 (bottom margin)
-export const MENU_SPACING = 8;      // Gap between menus
-export const LEFT_MENU_WIDTH = 276;  // (576 - 8 - 8 - 8) / 2 = 276
-export const RIGHT_MENU_WIDTH = 276;
 export const SINGLE_MENU_WIDTH = 560; // Full width for single menu
 
 /**
  * Create the main sky view image container
- * Full width (576), height 235, leaving 53px for menu area at bottom
+ * Full screen size (576x288), menu is rendered on top
  */
 export function createSkyViewContainer(): ImageContainerProperty {
   return {
@@ -60,215 +54,42 @@ export function createSkyViewContainer(): ImageContainerProperty {
   };
 }
 
-
-
 /**
- * Create the left menu container (primary navigation)
+ * Create the info text container for displaying identification text
+ * Positioned at top of screen, overlaying the sky view
  */
-export function createLeftMenuContainer(itemNames: string[] = ['Stars', 'Constellations', 'Planets'], isActive: boolean = true): ListContainerProperty {
-  const itemContainer = {
-    itemCount: itemNames.length,
-    itemWidth: 0,
-    isItemSelectBorderEn: 1,
-    itemName: itemNames,
-    toJson: () => ({
-      itemCount: itemNames.length,
-      itemWidth: 0,
-      isItemSelectBorderEn: 1,
-      itemName: itemNames,
-    }),
-  };
-
-  // Border color: 8 = white when active, 5 = gray when inactive
-  const borderColor = isActive ? 8 : 5;
-
+export function createInfoTextContainer(): TextContainerProperty {
   return {
-    xPosition: 8,
-    yPosition: MENU_Y_POSITION,
-    width: LEFT_MENU_WIDTH,
-    height: MENU_HEIGHT,
-    borderWidth: isActive ? 2 : 1,
-    borderColor: borderColor,
-    borderRdaius: 3,
-    paddingLength: 3,
-    containerID: CONTAINER_IDS.LEFT_MENU,
-    containerName: 'left-menu',
-    itemContainer,
-    isEventCapture: isActive ? 1 : 0, // Active menu must capture events
-    toJson: () => ({
-      xPosition: 8,
-      yPosition: MENU_Y_POSITION,
-      width: LEFT_MENU_WIDTH,
-      height: MENU_HEIGHT,
-      borderWidth: isActive ? 2 : 1,
-      borderColor: borderColor,
-      borderRdaius: 3,
-      paddingLength: 3,
-      containerID: CONTAINER_IDS.LEFT_MENU,
-      containerName: 'left-menu',
-      itemContainer: itemContainer.toJson(),
-      isEventCapture: isActive ? 1 : 0,
-    }),
-  };
-}
-
-/**
- * Create the right menu container (secondary - Stars vs Deep Sky)
- */
-export function createRightMenuContainer(itemNames: string[] = ['Stars', 'Deep Sky'], isActive: boolean = false): ListContainerProperty {
-  const itemContainer = {
-    itemCount: itemNames.length,
-    itemWidth: 0,
-    isItemSelectBorderEn: 1,
-    itemName: itemNames,
-    toJson: () => ({
-      itemCount: itemNames.length,
-      itemWidth: 0,
-      isItemSelectBorderEn: 1,
-      itemName: itemNames,
-    }),
-  };
-
-  // Border color: 8 = white when active, 5 = gray when inactive
-  const borderColor = isActive ? 8 : 5;
-
-  return {
-    xPosition: 8 + LEFT_MENU_WIDTH + MENU_SPACING,
-    yPosition: MENU_Y_POSITION,
-    width: RIGHT_MENU_WIDTH,
-    height: MENU_HEIGHT,
-    borderWidth: isActive ? 2 : 1,
-    borderColor: borderColor,
-    borderRdaius: 3,
-    paddingLength: 3,
-    containerID: CONTAINER_IDS.RIGHT_MENU,
-    containerName: 'right-menu',
-    itemContainer,
-    isEventCapture: isActive ? 1 : 0, // Active menu must capture events
-    toJson: () => ({
-      xPosition: 8 + LEFT_MENU_WIDTH + MENU_SPACING,
-      yPosition: MENU_Y_POSITION,
-      width: RIGHT_MENU_WIDTH,
-      height: MENU_HEIGHT,
-      borderWidth: isActive ? 2 : 1,
-      borderColor: borderColor,
-      borderRdaius: 3,
-      paddingLength: 3,
-      containerID: CONTAINER_IDS.RIGHT_MENU,
-      containerName: 'right-menu',
-      itemContainer: itemContainer.toJson(),
-      isEventCapture: isActive ? 1 : 0,
-    }),
-  };
-}
-
-/**
- * @deprecated Use createLeftMenuContainer instead
- */
-export function createModeSelectorContainer(itemNames: string[] = ['Stars', 'Constellations', 'Planets']): ListContainerProperty {
-  return createLeftMenuContainer(itemNames, true);
-}
-
-/**
- * Create list container configuration from item names
- * For use with rebuildPageContainer - creates both menus
- */
-export function createListContainerConfig(
-  leftItemNames: string[], 
-  rightItemNames: string[] = ['Stars', 'Deep Sky'],
-  activeMenu: ActiveMenu = ActiveMenu.Left
-): ListContainerProperty[] {
-  const isLeftActive = activeMenu === ActiveMenu.Left;
-  
-  return [
-    createLeftMenuContainer(leftItemNames, isLeftActive),
-    createRightMenuContainer(rightItemNames, !isLeftActive),
-  ];
-}
-
-/**
- * @deprecated Use createListContainerConfig with multiple items
- */
-export function createSingleListContainerConfig(itemNames: string[]): ListContainerProperty {
-  const itemContainer = {
-    itemCount: itemNames.length,
-    itemWidth: 0,
-    isItemSelectBorderEn: 1,
-    itemName: itemNames,
-    toJson: () => ({
-      itemCount: itemNames.length,
-      itemWidth: 0,
-      isItemSelectBorderEn: 1,
-      itemName: itemNames,
-    }),
-  };
-
-  return {
-    containerID: CONTAINER_IDS.LEFT_MENU,
-    containerName: 'left-menu',
     xPosition: 10,
-    yPosition: 243,
-    width: 556,
-    height: 40,
-    borderWidth: 1,
-    borderColor: 8,
-    borderRdaius: 3,
-    paddingLength: 3,
-    isEventCapture: 1,
-    itemContainer,
+    yPosition: 10,
+    width: 556, // 576 - 10 - 10
+    height: 70, // Enough for 3 lines of text
+    containerID: CONTAINER_IDS.INFO_TEXT,
+    containerName: 'info-text',
+    content: 'Point at sky', // Initial content
     toJson: () => ({
-      containerID: CONTAINER_IDS.LEFT_MENU,
-      containerName: 'left-menu',
       xPosition: 10,
-      yPosition: 243,
+      yPosition: 10,
       width: 556,
-      height: 40,
-      borderWidth: 1,
-      borderColor: 8,
-      borderRdaius: 3,
-      paddingLength: 3,
-      isEventCapture: 1,
-      itemContainer: itemContainer.toJson(),
+      height: 70,
+      containerID: CONTAINER_IDS.INFO_TEXT,
+      containerName: 'info-text',
+      content: 'Point at sky',
     }),
   };
 }
 
 /**
- * Create the startup page container configuration
- * This must be called only once when initializing
+ * Create a list container for capturing scroll events and menu selection
+ * This container has the actual menu items and captures scroll events.
+ * The visual appearance is minimal since we render our own menu image.
  */
-export function createStartupPageConfig(): CreateStartUpPageContainer {
-  const config: CreateStartUpPageContainer = {
-    containerTotalNum: 3,
-    imageObject: [createSkyViewContainer()],
-    listObject: [createLeftMenuContainer(), createRightMenuContainer()],
-    toJson: function() {
-      return {
-        containerTotalNum: 3,
-        imageObject: this.imageObject?.map(o => o.toJson()) || [],
-        textObject: this.textObject?.map(o => o.toJson()) || [],
-        listObject: this.listObject?.map(o => o.toJson()) || [],
-      };
-    },
-  };
-  return config;
-}
-
-// ============================================================================
-// SIMPLIFIED SINGLE-MENU LAYOUT (for Astronomical Compass v3)
-// ============================================================================
-
-/**
- * Create the single menu container (simplified mode selector)
- * Full width menu for mode selection: Identify | Find Target | Constellations
- */
-export function createSingleMenuContainer(
-  itemNames: string[] = ['Identify', 'Find Target', 'Constellations']
-): ListContainerProperty {
+export function createMenuEventContainer(itemNames: string[] = ['Identify', 'Find Target', 'Constellations']): ListContainerProperty {
+  // Create items that match our visual menu
   const itemContainer = {
     itemCount: itemNames.length,
-    itemWidth: 0,
-    isItemSelectBorderEn: 1,
+    itemWidth: 0,            // Auto width
+    isItemSelectBorderEn: 1, // Show selection border (subtle indicator)
     itemName: itemNames,
     toJson: () => ({
       itemCount: itemNames.length,
@@ -283,14 +104,14 @@ export function createSingleMenuContainer(
     yPosition: MENU_Y_POSITION,
     width: SINGLE_MENU_WIDTH,
     height: MENU_HEIGHT,
-    borderWidth: 1,
-    borderColor: 8, // White border
+    borderWidth: 1,          // Subtle border to match our rendered menu
+    borderColor: 8,          // White border
     borderRdaius: 3,
     paddingLength: 3,
-    containerID: CONTAINER_IDS.MENU,
-    containerName: 'mode-menu',
+    containerID: CONTAINER_IDS.MENU_EVENT,
+    containerName: 'menu-event',
     itemContainer,
-    isEventCapture: 1, // This is the only interactive container
+    isEventCapture: 1,       // Captures scroll/selection events
     toJson: () => ({
       xPosition: 8,
       yPosition: MENU_Y_POSITION,
@@ -300,28 +121,32 @@ export function createSingleMenuContainer(
       borderColor: 8,
       borderRdaius: 3,
       paddingLength: 3,
-      containerID: CONTAINER_IDS.MENU,
-      containerName: 'mode-menu',
+      containerID: CONTAINER_IDS.MENU_EVENT,
+      containerName: 'menu-event',
       itemContainer: itemContainer.toJson(),
       isEventCapture: 1,
     }),
   };
 }
 
+
+
 /**
- * Create simplified startup page config with single menu
- * Used for the new Astronomical Compass mode
+ * Create simplified startup page config
+ * Sky view includes the menu rendered on top
+ * Plus a list container for event capture and selection
  */
 export function createSimplifiedStartupConfig(
   menuItems: string[] = ['Identify', 'Find Target', 'Constellations']
 ): CreateStartUpPageContainer {
   const config: CreateStartUpPageContainer = {
-    containerTotalNum: 2, // Image view + single menu
+    containerTotalNum: 3, // Sky view + text info + menu event container
     imageObject: [createSkyViewContainer()],
-    listObject: [createSingleMenuContainer(menuItems)],
+    textObject: [createInfoTextContainer()],
+    listObject: [createMenuEventContainer(menuItems)], // Captures scroll events
     toJson: function() {
       return {
-        containerTotalNum: 2,
+        containerTotalNum: 3,
         imageObject: this.imageObject?.map(o => o.toJson()) || [],
         textObject: this.textObject?.map(o => o.toJson()) || [],
         listObject: this.listObject?.map(o => o.toJson()) || [],
@@ -332,20 +157,10 @@ export function createSimplifiedStartupConfig(
 }
 
 /**
- * Create page rebuild config with single menu
+ * Create page rebuild config
  */
-export function createSimplifiedRebuildConfig(
-  menuItems: string[] = ['Identify', 'Find Target', 'Constellations']
-): CreateStartUpPageContainer {
-  return createSimplifiedStartupConfig(menuItems);
-}
-
-/**
- * Create a simplified page config for rebuilding
- * (Same structure as startup but used for updates)
- */
-export function createPageRebuildConfig(): CreateStartUpPageContainer {
-  return createStartupPageConfig();
+export function createSimplifiedRebuildConfig(): CreateStartUpPageContainer {
+  return createSimplifiedStartupConfig();
 }
 
 /**
@@ -365,4 +180,3 @@ export function generateInfoText(
   }
   return text;
 }
-
