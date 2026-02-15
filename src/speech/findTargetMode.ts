@@ -205,6 +205,8 @@ export function getFindTargetOverlay(): FindTargetOverlayData {
     modeState.overlay.candidateNames = modeState.candidateList.map(c => c.name);
     modeState.overlay.selectedCandidateIndex = modeState.selectedCandidateIndex;
   }
+  // Hide the idle hint after enough uses
+  modeState.overlay.hideIdleHint = getFindTargetUsageCount() >= FIND_TARGET_HINT_THRESHOLD;
   return modeState.overlay;
 }
 
@@ -420,8 +422,8 @@ function matchObjectFromText(text: string): SearchableObject | null {
   const infoMatch = allObjects.find(obj => {
     const info = (obj.info || '').toLowerCase();
     const constellation = (obj.constellation || '').toLowerCase();
-    return normalizedInput.includes(info) || normalizedInput.includes(constellation) ||
-           info.includes(normalizedInput) || constellation.includes(normalizedInput);
+    return (info.length > 0 && (normalizedInput.includes(info) || info.includes(normalizedInput))) ||
+           (constellation.length > 0 && (normalizedInput.includes(constellation) || constellation.includes(normalizedInput)));
   });
   if (infoMatch) return infoMatch;
 
