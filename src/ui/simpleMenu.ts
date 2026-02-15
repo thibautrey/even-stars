@@ -30,9 +30,9 @@ export const SIMPLE_MENU_ITEMS: SimpleMenuItem[] = [
     description: 'Guide to selected object',
   },
   {
-    name: 'Constellations',
+    name: 'Explain',
     appMode: AppMode.ConstellationHints,
-    description: 'Show constellation hints',
+    description: 'Explain celestial objects',
   },
 ];
 

@@ -9,7 +9,7 @@ import {
 
 // Menu appearance constants
 const MENU_ITEM_PADDING = 8;
-const MENU_BORDER_RADIUS = 3;
+// const MENU_BORDER_RADIUS = 3;  // Currently unused
 const MENU_FONT_SIZE = 12;
 const MENU_FONT_FAMILY = 'sans-serif';
 

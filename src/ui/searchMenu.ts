@@ -15,7 +15,7 @@ export const SEARCH_MENU_CATEGORIES = [
   { name: 'Stars', value: SearchCategory.BrightStars },
   { name: 'Planets', value: SearchCategory.Planets },
   { name: 'Deep Sky', value: SearchCategory.DeepSky },
-  { name: 'Constellations', value: SearchCategory.Constellations },
+  { name: 'Explain', value: SearchCategory.Constellations },
 ];
 
 /**

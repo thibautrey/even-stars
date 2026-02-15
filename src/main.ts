@@ -412,6 +412,7 @@ function setupEventListeners(): void {
  * Handle menu navigation (next/prev)
  */
 function handleMenuNavigation(direction: 'next' | 'prev'): void {
+  // Navigate the mode selection menu
   if (direction === 'next') {
     selectNextItem(menuState);
   } else {
@@ -497,6 +498,7 @@ function render(): void {
 
   // Update Identify mode logic when in Identify mode
   if (appState.appMode === AppMode.Identify) {
+    // Update the state machine for identify mode
     const stateChanged = updateIdentifyMode(appState);
     if (stateChanged) {
       updateBrowserDisplay();
@@ -507,7 +509,8 @@ function render(): void {
   currentInfoContent = updateInfoPanel(appState);
 
   // Render sky to offscreen canvas (for glasses)
-  // TODO: Update renderSkyToBuffer to accept CompassState
+  // In Identify mode, the renderer draws object labels directly on the canvas
+  // at their projected screen positions — AR-style overlay on the glasses display
   renderSkyToBuffer({
     ctx: skyCtx,
     location: appState.location,
@@ -519,6 +522,7 @@ function render(): void {
     planetFilter: 'all' as any,
     deepSkyFilter: 'all' as any,
     finderTarget: appState.focusTarget as any,
+    identifyMode: appState.appMode === AppMode.Identify,
   });
 
   // Render horizontal menu at the bottom

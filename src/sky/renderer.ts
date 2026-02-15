@@ -304,6 +304,8 @@ export interface SkyRenderOptions {
   deepSkyFilter?: DeepSkyFilter;
   /** Target object for the finder/locator feature */
   finderTarget?: SearchableObject | null;
+  /** Whether to render identify overlay (labels at object positions) */
+  identifyMode?: boolean;
 }
 
 export function renderSky(options: SkyRenderOptions): {
@@ -559,6 +561,7 @@ export function renderSkyToBuffer(options: SkyRenderOptions): {
     planetFilter = PlanetFilter.All,
     deepSkyFilter = DeepSkyFilter.All,
     finderTarget = null,
+    identifyMode = false,
   } = options;
   
   // Clear canvas with BLACK background
@@ -662,7 +665,12 @@ export function renderSkyToBuffer(options: SkyRenderOptions): {
   }
   
   // Render star name labels (with collision avoidance)
-  renderStarLabels(ctx, location, orientation, fov, date);
+  // In identify mode, use the enhanced identify overlay instead
+  if (identifyMode) {
+    renderIdentifyOverlay(ctx, location, orientation, fov, date);
+  } else {
+    renderStarLabels(ctx, location, orientation, fov, date);
+  }
   
   // Render cardinal markers
   renderCardinalMarkers(ctx, orientation, fov);
@@ -808,6 +816,214 @@ function renderStarLabels(
         break;
       }
     }
+  }
+}
+
+// ============================================================================
+// IDENTIFY MODE OVERLAY
+// Renders object labels directly on the glasses canvas at projected positions
+// Optimized for 576x288 monochrome display at ~10 FPS
+// ============================================================================
+
+/** Type symbol for different celestial object types */
+function getIdentifySymbol(type: string): string {
+  switch (type) {
+    case 'star': return '★';
+    case 'planet': return '●';
+    case 'galaxy': return '⊕';
+    case 'nebula': return '☁';
+    case 'cluster': return '✦';
+    default: return '·';
+  }
+}
+
+/** A candidate object for labeling in identify mode */
+interface IdentifyCandidate {
+  name: string;
+  type: string;
+  x: number;      // projected screen x
+  y: number;      // projected screen y
+  priority: number; // higher = label first (based on brightness)
+  magnitude: number;
+}
+
+/**
+ * Render the Identify Mode overlay on the glasses canvas.
+ * 
+ * This draws labels next to every visible known celestial object
+ * (bright stars, planets, bright DSOs) at their projected screen
+ * positions. The wearer looks around the sky and sees names floating
+ * next to the real objects — an AR-style star identification experience.
+ * 
+ * Design constraints:
+ * - Max 8 labels to keep the 576x288 display readable
+ * - 11px font for legibility on tiny display
+ * - Black background pill behind each label for contrast
+ * - Collision avoidance prevents overlapping text
+ * - Sorted by brightness: brightest objects get labels first
+ * - Includes stars (mag < 2.5), all visible planets, bright DSOs (mag < 6)
+ */
+function renderIdentifyOverlay(
+  ctx: CanvasRenderingContext2D,
+  location: GeoLocation,
+  orientation: HeadOrientation,
+  fov: FieldOfView,
+  date: Date
+): void {
+  const candidates: IdentifyCandidate[] = [];
+
+  // --- Collect bright named stars ---
+  for (const star of BRIGHT_STARS) {
+    if (!star.name || star.magnitude > 2.5) continue;
+
+    const coords = getStarHorizontalCoords(star, location, date);
+    if (!isAboveHorizon(coords.altitude, -2)) continue;
+
+    const offset = getViewOffset(coords, orientation.azimuth, orientation.pitch);
+    if (!isInFieldOfView(offset.deltaAz, offset.deltaAlt, fov.horizontal, fov.vertical)) continue;
+
+    const pos = projectToCanvas(offset.deltaAz, offset.deltaAlt, CANVAS_WIDTH, CANVAS_HEIGHT, fov.horizontal, fov.vertical);
+    candidates.push({
+      name: star.name,
+      type: 'star',
+      x: pos.x,
+      y: pos.y,
+      priority: 10 - star.magnitude, // Sirius (-1.46) => ~11.5
+      magnitude: star.magnitude,
+    });
+  }
+
+  // --- Collect visible planets ---
+  for (const planetData of getAllPlanets(location, date)) {
+    if (!planetData.coords || !isAboveHorizon(planetData.coords.altitude, -2)) continue;
+
+    const offset = getViewOffset(planetData.coords, orientation.azimuth, orientation.pitch);
+    if (!isInFieldOfView(offset.deltaAz, offset.deltaAlt, fov.horizontal, fov.vertical)) continue;
+
+    const pos = projectToCanvas(offset.deltaAz, offset.deltaAlt, CANVAS_WIDTH, CANVAS_HEIGHT, fov.horizontal, fov.vertical);
+    candidates.push({
+      name: planetData.planet.name,
+      type: 'planet',
+      x: pos.x,
+      y: pos.y,
+      priority: 12 - planetData.planet.baseMagnitude, // Planets are usually very bright
+      magnitude: planetData.planet.baseMagnitude,
+    });
+  }
+
+  // --- Collect bright deep sky objects ---
+  for (const dso of DEEP_SKY_OBJECTS) {
+    if (dso.magnitude > 5.5) continue; // Only prominently visible DSOs
+
+    const coords = getDSOHorizontalCoords(dso, location, date);
+    if (!isAboveHorizon(coords.altitude, -2)) continue;
+
+    const offset = getViewOffset(coords, orientation.azimuth, orientation.pitch);
+    if (!isInFieldOfView(offset.deltaAz, offset.deltaAlt, fov.horizontal, fov.vertical)) continue;
+
+    const pos = projectToCanvas(offset.deltaAz, offset.deltaAlt, CANVAS_WIDTH, CANVAS_HEIGHT, fov.horizontal, fov.vertical);
+    candidates.push({
+      name: dso.name,
+      type: dso.type,
+      x: pos.x,
+      y: pos.y,
+      priority: 8 - dso.magnitude, // DSOs are dimmer, lower priority
+      magnitude: dso.magnitude,
+    });
+  }
+
+  // Sort: brightest first
+  candidates.sort((a, b) => b.priority - a.priority);
+
+  // --- Place labels with collision avoidance ---
+  const MAX_LABELS = 8;
+  const FONT_SIZE = 11;
+  const LINE_HEIGHT = FONT_SIZE + 2;
+  const LABEL_PADDING_H = 4; // horizontal padding inside pill
+  const LABEL_PADDING_V = 2; // vertical padding inside pill
+  const MARGIN = 5;          // gap between star dot and label
+  
+  ctx.font = `bold ${FONT_SIZE}px sans-serif`;
+  ctx.textBaseline = 'middle';
+
+  const placedRects: Array<{ x: number; y: number; width: number; height: number }> = [];
+  let placedCount = 0;
+
+  for (const candidate of candidates) {
+    if (placedCount >= MAX_LABELS) break;
+
+    // Build label text: "★ Sirius" or "● Jupiter"
+    const symbol = getIdentifySymbol(candidate.type);
+    const labelText = `${symbol} ${candidate.name}`;
+    const textWidth = ctx.measureText(labelText).width;
+    const pillW = textWidth + LABEL_PADDING_H * 2;
+    const pillH = LINE_HEIGHT + LABEL_PADDING_V * 2;
+
+    const starRadius = getStarSize(candidate.magnitude);
+
+    // Try placement positions: right, left, above, below
+    const placements = [
+      { x: candidate.x + starRadius + MARGIN, y: candidate.y - pillH / 2 },                          // right
+      { x: candidate.x - starRadius - MARGIN - pillW, y: candidate.y - pillH / 2 },                  // left
+      { x: candidate.x - pillW / 2, y: candidate.y - starRadius - MARGIN - pillH },                  // above
+      { x: candidate.x - pillW / 2, y: candidate.y + starRadius + MARGIN },                          // below
+    ];
+
+    let placed = false;
+    for (const p of placements) {
+      // Bounds check (keep within canvas, leaving room for cardinal markers)
+      if (p.x < 2 || p.x + pillW > CANVAS_WIDTH - 2) continue;
+      if (p.y < 14 || p.y + pillH > CANVAS_HEIGHT - 4) continue; // 14px top margin for info overlay
+
+      // Collision check
+      if (rectOverlaps(p.x, p.y, pillW, pillH, placedRects)) continue;
+
+      // --- Draw connector line (subtle) ---
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(candidate.x, candidate.y);
+      // Connect to nearest edge of pill
+      const connectX = Math.max(p.x, Math.min(p.x + pillW, candidate.x));
+      const connectY = Math.max(p.y, Math.min(p.y + pillH, candidate.y));
+      ctx.lineTo(connectX, connectY);
+      ctx.stroke();
+
+      // --- Draw pill background ---
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+      ctx.beginPath();
+      // Rounded rectangle (manual for compatibility)
+      const r = 3; // border radius
+      ctx.moveTo(p.x + r, p.y);
+      ctx.lineTo(p.x + pillW - r, p.y);
+      ctx.arcTo(p.x + pillW, p.y, p.x + pillW, p.y + r, r);
+      ctx.lineTo(p.x + pillW, p.y + pillH - r);
+      ctx.arcTo(p.x + pillW, p.y + pillH, p.x + pillW - r, p.y + pillH, r);
+      ctx.lineTo(p.x + r, p.y + pillH);
+      ctx.arcTo(p.x, p.y + pillH, p.x, p.y + pillH - r, r);
+      ctx.lineTo(p.x, p.y + r);
+      ctx.arcTo(p.x, p.y, p.x + r, p.y, r);
+      ctx.fill();
+
+      // --- Draw pill border ---
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+
+      // --- Draw label text ---
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+      ctx.textAlign = 'left';
+      ctx.fillText(labelText, p.x + LABEL_PADDING_H, p.y + pillH / 2);
+
+      // Record placed rectangle
+      placedRects.push({ x: p.x, y: p.y, width: pillW, height: pillH });
+      placedCount++;
+      placed = true;
+      break;
+    }
+
+    // If no placement position worked, skip this candidate
+    if (!placed) continue;
   }
 }
 
