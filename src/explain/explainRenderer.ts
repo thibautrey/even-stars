@@ -27,9 +27,6 @@ const SIDEBAR_BOTTOM = CANVAS_HEIGHT - 40; // leave room for menu
 /** Sidebar inner padding */
 const SIDEBAR_PAD = 6;
 
-/** Lock indicator */
-const LOCK_ICON = '◎';
-
 // ============================================================================
 // Fonts & colors
 // ============================================================================
@@ -38,12 +35,10 @@ const FONT_BANNER_NAME = 'bold 14px sans-serif';
 const FONT_BANNER_STATS = '10px sans-serif';
 const FONT_SIDEBAR = '10px sans-serif';
 const FONT_SCANNING = 'bold 12px sans-serif';
-const FONT_LOCK = '10px sans-serif';
 
 const COLOR_WHITE = 'rgba(255, 255, 255, 0.95)';
 const COLOR_DIM = 'rgba(255, 255, 255, 0.6)';
 const COLOR_DIMMER = 'rgba(255, 255, 255, 0.4)';
-const COLOR_LOCK_BG = 'rgba(255, 255, 100, 0.15)';
 const COLOR_LOCK_BORDER = 'rgba(255, 255, 100, 0.5)';
 
 // ============================================================================

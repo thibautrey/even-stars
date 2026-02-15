@@ -1,5 +1,6 @@
 // Speech-to-Text Module using OpenAI Whisper API
 // Captures PCM audio from the glasses microphone and transcribes it via OpenAI
+// Falls back to browser getUserMedia when SDK audioControl is unavailable (e.g. simulator)
 
 import { loadApiKey } from './apiKeyStorage';
 import type { EvenAppBridge } from '@evenrealities/even_hub_sdk';
@@ -32,6 +33,17 @@ export interface SpeechToTextCallbacks {
   onError: (error: string) => void;
   /** Called when listening state changes */
   onStateChange: (isListening: boolean) => void;
+}
+
+// ============================================================================
+// Audio source enum
+// ============================================================================
+
+enum AudioSource {
+  /** SDK audioControl — real glasses mic */
+  SDK = 'sdk',
+  /** Browser getUserMedia — fallback for simulator / desktop */
+  Browser = 'browser',
 }
 
 // ============================================================================
@@ -112,6 +124,93 @@ function writeString(view: DataView, offset: number, str: string): void {
 }
 
 // ============================================================================
+// Browser microphone fallback (getUserMedia → PCM 16kHz 16-bit LE mono)
+// ============================================================================
+
+/** Held during browser-mic recording so we can stop later */
+let browserMicStream: MediaStream | null = null;
+let browserAudioCtx: AudioContext | null = null;
+let browserScriptNode: ScriptProcessorNode | null = null;
+
+/**
+ * Open the browser microphone via getUserMedia, down-sample to 16 kHz mono,
+ * and pump 16-bit LE PCM chunks into `feedAudio()`.
+ */
+async function openBrowserMic(): Promise<void> {
+  // Check if getUserMedia is available
+  if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+    throw new Error(
+      'Microphone access not available. ' +
+      'Ensure your app is running on localhost or HTTPS. ' +
+      '(getUserMedia requires a secure context)'
+    );
+  }
+
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      channelCount: 1,
+      sampleRate: SAMPLE_RATE,      // hint; browser may ignore
+      echoCancellation: true,
+      noiseSuppression: true,
+    },
+  });
+
+  browserMicStream = stream;
+
+  // Web Audio graph: source → scriptProcessor → (our callback)
+  const ctx = new AudioContext({ sampleRate: SAMPLE_RATE });
+  browserAudioCtx = ctx;
+
+  const source = ctx.createMediaStreamSource(stream);
+
+  // ScriptProcessorNode is deprecated but universally supported.
+  // bufferSize = 4096 gives ~256 ms chunks at 16 kHz.
+  const processor = ctx.createScriptProcessor(4096, 1, 1);
+  browserScriptNode = processor;
+
+  processor.onaudioprocess = (e: AudioProcessingEvent) => {
+    if (!state.isListening) return;
+
+    const float32 = e.inputBuffer.getChannelData(0);
+    // Convert Float32 [-1..1] → Int16 LE bytes
+    const int16 = new Int16Array(float32.length);
+    for (let i = 0; i < float32.length; i++) {
+      const s = Math.max(-1, Math.min(1, float32[i]));
+      int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    }
+    const bytes = new Uint8Array(int16.buffer);
+    feedAudio(bytes);
+  };
+
+  source.connect(processor);
+  processor.connect(ctx.destination); // required for onaudioprocess to fire
+
+  console.log('🎤 Browser microphone opened (fallback)');
+}
+
+/**
+ * Close the browser microphone.
+ */
+function closeBrowserMic(): void {
+  if (browserScriptNode) {
+    browserScriptNode.disconnect();
+    browserScriptNode.onaudioprocess = null;
+    browserScriptNode = null;
+  }
+  if (browserAudioCtx) {
+    browserAudioCtx.close().catch(() => {});
+    browserAudioCtx = null;
+  }
+  if (browserMicStream) {
+    for (const track of browserMicStream.getTracks()) {
+      track.stop();
+    }
+    browserMicStream = null;
+  }
+  console.log('🎤 Browser microphone closed');
+}
+
+// ============================================================================
 // Speech-to-Text Manager
 // ============================================================================
 
@@ -120,6 +219,8 @@ let callbacks: SpeechToTextCallbacks | null = null;
 let transcriptionTimer: ReturnType<typeof setInterval> | null = null;
 let silenceTimer: ReturnType<typeof setTimeout> | null = null;
 let bridgeRef: EvenAppBridge | null = null;
+/** Which audio source is currently active */
+let activeAudioSource: AudioSource | null = null;
 
 function createInitialState(): SpeechToTextState {
   return {
@@ -135,6 +236,7 @@ function createInitialState(): SpeechToTextState {
 
 /**
  * Start listening: opens the microphone and begins accumulating audio.
+ * Tries SDK audioControl first; falls back to browser getUserMedia.
  */
 export async function startListening(
   bridge: EvenAppBridge,
@@ -151,26 +253,52 @@ export async function startListening(
   callbacks = cbs;
   state = createInitialState();
   state.isListening = true;
+  activeAudioSource = null;
 
   callbacks.onStateChange(true);
 
-  // Open the microphone
+  // --- Attempt 1: SDK audioControl (real glasses) ---
+  let sdkMicOk = false;
   try {
     const ok = await bridge.audioControl(true);
-    if (!ok) {
-      state.error = 'Failed to open microphone';
+    if (ok) {
+      sdkMicOk = true;
+      activeAudioSource = AudioSource.SDK;
+      console.log('🎤 SDK microphone opened');
+    }
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.warn('SDK audioControl not available, falling back to browser mic:', errMsg);
+  }
+
+  // --- Attempt 2: Browser getUserMedia (simulator / desktop) ---
+  if (!sdkMicOk) {
+    try {
+      await openBrowserMic();
+      activeAudioSource = AudioSource.Browser;
+    } catch (err) {
+      let msg: string;
+      if (err instanceof Error) {
+        msg = err.message;
+      } else {
+        msg = String(err);
+      }
+
+      // Provide more helpful error messages
+      if (msg.includes('NotAllowedError') || msg.includes('Permission denied')) {
+        msg = 'Microphone permission denied. Please allow microphone access in your browser settings.';
+      } else if (msg.includes('NotFoundError') || msg.includes('no audio input')) {
+        msg = 'No microphone device found. Please connect a microphone and try again.';
+      } else if (msg.includes('secure context') || msg.includes('HTTPS')) {
+        msg = 'Microphone access requires HTTPS or localhost. Please ensure your app is running on localhost.';
+      }
+
+      state.error = `Mic error: ${msg}`;
       callbacks.onError(state.error);
       state.isListening = false;
       callbacks.onStateChange(false);
       return false;
     }
-    console.log('🎤 Microphone opened for speech-to-text');
-  } catch (err) {
-    state.error = `Mic error: ${err}`;
-    callbacks.onError(state.error);
-    state.isListening = false;
-    callbacks.onStateChange(false);
-    return false;
   }
 
   // Start periodic transcription
@@ -221,15 +349,18 @@ export async function stopListening(): Promise<string> {
     silenceTimer = null;
   }
 
-  // Close microphone
-  if (bridgeRef) {
+  // Close the active audio source
+  if (activeAudioSource === AudioSource.SDK && bridgeRef) {
     try {
       await bridgeRef.audioControl(false);
-      console.log('🎤 Microphone closed');
+      console.log('🎤 SDK microphone closed');
     } catch (err) {
-      console.warn('Error closing microphone:', err);
+      console.warn('Error closing SDK microphone:', err);
     }
+  } else if (activeAudioSource === AudioSource.Browser) {
+    closeBrowserMic();
   }
+  activeAudioSource = null;
 
   // Final transcription of remaining audio
   if (state.audioBuffer.length > 0 && state.totalBytes >= MIN_AUDIO_BYTES) {

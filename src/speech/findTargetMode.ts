@@ -175,6 +175,35 @@ export function isFindTargetActive(): boolean {
   return modeState.isActive;
 }
 
+/**
+ * Process manually-provided text as if it came from speech-to-text.
+ * This is a shortcut that skips the mic → Whisper step and goes straight
+ * to the object-matching / target-lock pipeline.
+ */
+export function processManualText(text: string): void {
+  if (!modeState.isActive) return;
+
+  const trimmed = text.trim();
+  if (!trimmed) return;
+
+  // Transition through the same overlay states the voice path uses
+  modeState.overlay.state = FindTargetOverlayState.Processing;
+  modeState.overlay.transcription = trimmed;
+
+  const matched = matchObjectFromText(trimmed);
+  if (matched) {
+    modeState.matchedObject = matched;
+    modeState.overlay.state = FindTargetOverlayState.Matched;
+    modeState.overlay.matchedName = matched.name;
+
+    // Convert to FocusTarget and notify — exactly like finishListening()
+    const target = searchObjectToFocusTarget(matched);
+    onTargetFound?.(target);
+  } else {
+    modeState.overlay.state = FindTargetOverlayState.NoMatch;
+  }
+}
+
 // ============================================================================
 // Internal helpers
 // ============================================================================

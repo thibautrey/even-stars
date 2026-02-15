@@ -22,5 +22,6 @@ export {
   handleAudioData,
   getFindTargetOverlay,
   isFindTargetActive,
+  processManualText,
   type FindTargetModeState,
 } from './findTargetMode';

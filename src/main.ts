@@ -69,6 +69,7 @@ import {
   handleAudioData,
   getFindTargetOverlay,
   isFindTargetActive,
+  processManualText,
   renderFindTargetOverlay,
   saveApiKey,
   loadApiKey,
@@ -479,13 +480,13 @@ function setupEventListeners(): void {
   // Setup keyboard controls for menu navigation
   // UP/DOWN arrows control the menu (matching glasses scroll gesture)
   window.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W' || e.key === 'k' || e.key === 'K') {
+    if (e.key === 'ArrowUp') {
       e.preventDefault();
-      console.log('⬆️ Key pressed - previous menu item (matches ring scroll up / simulator W/K)');
+      console.log('⬆️ ArrowUp pressed - previous menu item');
       handleMenuNavigation('prev');
-    } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S' || e.key === 'j' || e.key === 'J') {
+    } else if (e.key === 'ArrowDown') {
       e.preventDefault();
-      console.log('⬇️ Key pressed - next menu item (matches ring scroll down / simulator S/J)');
+      console.log('⬇️ ArrowDown pressed - next menu item');
       handleMenuNavigation('next');
     } else if (e.key === 'Enter') {
       e.preventDefault();
@@ -900,7 +901,62 @@ window.addEventListener('beforeunload', cleanup);
   console.log('Console: selectMenuItem(0), handleMenuNavigation("next"), handleRingClick(), handleRingDoubleClick()');
 };
 
+// Wire up Developer Panel "Find Target (Manual)" controls
+function initDevPanelFindTarget(): void {
+  const searchBtn = document.getElementById('find-target-search-btn');
+  const textInput = document.getElementById('find-target-text-input') as HTMLInputElement | null;
+  const resultDiv = document.getElementById('find-target-result');
+  const resultName = document.getElementById('find-target-result-name');
+  const statusDiv = document.getElementById('find-target-status');
+
+  if (!searchBtn || !textInput) return;
+
+  const doSearch = () => {
+    const text = textInput.value.trim();
+    if (!text) {
+      if (statusDiv) statusDiv.textContent = 'Please enter text first';
+      return;
+    }
+
+    // Ensure Find Target mode is active before processing
+    if (!isFindTargetActive() && bridge) {
+      activateFindTargetMode(bridge, (target) => {
+        appState.focusTarget = target;
+        console.log('🎯 Manual search found target:', target.name);
+        updateBrowserDisplay();
+        render();
+      }).then(() => {
+        processManualText(text);
+        showResult();
+      });
+      return;
+    }
+
+    processManualText(text);
+    showResult();
+  };
+
+  const showResult = () => {
+    const overlay = getFindTargetOverlay();
+    if (overlay.matchedName) {
+      if (resultDiv) resultDiv.style.display = 'block';
+      if (resultName) resultName.textContent = overlay.matchedName;
+      if (statusDiv) statusDiv.textContent = `Matched from: "${textInput.value.trim()}"`;
+    } else {
+      if (resultDiv) resultDiv.style.display = 'none';
+      if (statusDiv) statusDiv.textContent = `No match for: "${textInput.value.trim()}"`;
+    }
+  };
+
+  searchBtn.addEventListener('click', doSearch);
+  textInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') doSearch();
+  });
+}
+
 // Start the application
-init().catch((error) => {
+init().then(() => {
+  initDevPanelFindTarget();
+}).catch((error) => {
   console.error('Initialization failed:', error);
 });
