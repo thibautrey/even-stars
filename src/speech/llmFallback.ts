@@ -56,6 +56,109 @@ Rules:
 - NEVER return anything other than a JSON object.`;
 
 // ============================================================================
+// Per-model token parameter preference (max_tokens vs max_completion_tokens)
+// ============================================================================
+
+const TOKEN_PREF_STORAGE_KEY = 'even_stars_model_token_pref';
+
+type TokenParamStyle = 'max_tokens' | 'max_completion_tokens';
+
+/** Load the saved token-param preferences map from localStorage. */
+function loadTokenPrefs(): Record<string, TokenParamStyle> {
+  try {
+    const raw = localStorage.getItem(TOKEN_PREF_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Save a model's preferred token parameter to localStorage. */
+function saveTokenPref(model: string, style: TokenParamStyle): void {
+  const prefs = loadTokenPrefs();
+  prefs[model] = style;
+  try {
+    localStorage.setItem(TOKEN_PREF_STORAGE_KEY, JSON.stringify(prefs));
+  } catch { /* quota exceeded — ignore */ }
+  console.log(`💾 Saved token param preference for ${model}: ${style}`);
+}
+
+/** Get the preferred token param for a model, defaulting to max_completion_tokens. */
+function getTokenPref(model: string): TokenParamStyle {
+  return loadTokenPrefs()[model] ?? 'max_completion_tokens';
+}
+
+/** Build the request body, using the given token param style and temperature. */
+function buildRequestBody(
+  model: string,
+  query: string,
+  tokenStyle: TokenParamStyle,
+  temperature: number,
+): string {
+  const body: Record<string, unknown> = {
+    model,
+    temperature,
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: query },
+    ],
+  };
+  body[tokenStyle] = 4000;
+  return JSON.stringify(body);
+}
+
+/** Detect whether a 400 error is about the wrong token parameter. */
+function isTokenParamError(status: number, responseText: string): TokenParamStyle | null {
+  if (status !== 400) return null;
+  if (responseText.includes("'max_tokens' is not supported") ||
+      responseText.includes('"max_tokens" is not supported')) {
+    return 'max_completion_tokens';
+  }
+  if (responseText.includes("'max_completion_tokens' is not supported") ||
+      responseText.includes('"max_completion_tokens" is not supported')) {
+    return 'max_tokens';
+  }
+  return null;
+}
+
+// ============================================================================
+// Per-model temperature preference
+// ============================================================================
+
+const TEMP_PREF_STORAGE_KEY = 'even_stars_model_temp_pref';
+
+/** Load the saved temperature preferences map from localStorage. */
+function loadTempPrefs(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(TEMP_PREF_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Save a model's preferred temperature to localStorage. */
+function saveTempPref(model: string, temp: number): void {
+  const prefs = loadTempPrefs();
+  prefs[model] = temp;
+  try {
+    localStorage.setItem(TEMP_PREF_STORAGE_KEY, JSON.stringify(prefs));
+  } catch { /* quota exceeded — ignore */ }
+  console.log(`💾 Saved temperature preference for ${model}: ${temp}`);
+}
+
+/** Get the preferred temperature for a model, defaulting to 0.2. */
+function getTempPref(model: string): number {
+  return loadTempPrefs()[model] ?? 0.2;
+}
+
+/** Detect whether a 400 error is about unsupported temperature. */
+function isTempError(status: number, responseText: string): boolean {
+  if (status !== 400) return false;
+  return responseText.includes("'temperature'") && responseText.includes('does not support');
+}
+
+// ============================================================================
 // Public API
 // ============================================================================
 
@@ -86,22 +189,62 @@ export async function llmFallbackSearch(
   const model = getSelectedModel();
 
   try {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    };
+
+    // Try with the model's preferred token param style and temperature
+    let tokenStyle = getTokenPref(model);
+    let temperature = getTempPref(model);
+    let res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.2,
-        max_tokens: 4000,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: query },
-        ],
-      }),
+      headers,
+      body: buildRequestBody(model, query, tokenStyle, temperature),
     });
+
+    // If we get a 400, check if it's about token param or temperature and retry
+    if (!res.ok && res.status === 400) {
+      const errText = await res.text();
+
+      // Try fixing token parameter error
+      const correctStyle = isTokenParamError(res.status, errText);
+      if (correctStyle && correctStyle !== tokenStyle) {
+        console.log(`🔄 Model ${model} requires ${correctStyle} — retrying…`);
+        saveTokenPref(model, correctStyle);
+        tokenStyle = correctStyle;
+        res = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers,
+          body: buildRequestBody(model, query, tokenStyle, temperature),
+        });
+      }
+
+      // If still not ok, try fixing temperature error
+      if (!res.ok && res.status === 400 && isTempError(res.status, errText)) {
+        console.log(`🔄 Model ${model} only supports default temperature — retrying with temperature=1…`);
+        saveTempPref(model, 1);
+        temperature = 1;
+        res = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers,
+          body: buildRequestBody(model, query, tokenStyle, temperature),
+        });
+      } else if (!res.ok && res.status === 400) {
+        // Still a 400 error — not token or temperature related
+        const isTempIssue = isTempError(res.status, errText);
+        if (isTempIssue) {
+          console.log(`🔄 Model ${model} only supports default temperature — retrying with temperature=1…`);
+          saveTempPref(model, 1);
+          temperature = 1;
+          res = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers,
+            body: buildRequestBody(model, query, tokenStyle, temperature),
+          });
+        }
+      }
+    }
 
     if (!res.ok) {
       const text = await res.text();
