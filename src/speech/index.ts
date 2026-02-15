@@ -19,6 +19,7 @@ export {
   deactivateFindTargetMode,
   handleFindTargetClick,
   handleFindTargetDoubleClick,
+  handleFindTargetScroll,
   handleAudioData,
   getFindTargetOverlay,
   isFindTargetActive,

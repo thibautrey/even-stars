@@ -58,3 +58,37 @@ export async function hasApiKey(bridge?: EvenAppBridge | null): Promise<boolean>
   const key = await loadApiKey(bridge);
   return key.length > 0;
 }
+
+// ============================================================================
+// Find Target usage counter
+// ============================================================================
+
+const FIND_TARGET_USAGE_KEY = 'find_target_usage_count';
+
+/** Threshold after which the idle hint text is hidden on the glasses. */
+export const FIND_TARGET_HINT_THRESHOLD = 4;
+
+/**
+ * Get the number of times Find Target mode has been activated.
+ */
+export function getFindTargetUsageCount(): number {
+  try {
+    const raw = window.localStorage.getItem(FIND_TARGET_USAGE_KEY);
+    return raw ? parseInt(raw, 10) || 0 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Increment the Find Target activation counter by 1.
+ */
+export function incrementFindTargetUsage(): number {
+  const next = getFindTargetUsageCount() + 1;
+  try {
+    window.localStorage.setItem(FIND_TARGET_USAGE_KEY, String(next));
+  } catch {
+    // localStorage not available
+  }
+  return next;
+}

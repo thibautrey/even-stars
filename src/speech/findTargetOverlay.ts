@@ -60,6 +60,8 @@ export enum FindTargetOverlayState {
   Error = 'error',
   /** No API key configured */
   NoApiKey = 'no_api_key',
+  /** AI returned multiple candidates — user must pick one */
+  SelectFromList = 'select_from_list',
 }
 
 export interface FindTargetOverlayData {
@@ -70,6 +72,12 @@ export interface FindTargetOverlayData {
   matchedName: string | null;
   /** Error message */
   errorMessage: string | null;
+  /** Candidate names for SelectFromList state */
+  candidateNames?: string[];
+  /** Currently highlighted candidate index */
+  selectedCandidateIndex?: number;
+  /** When true, the idle-state hint text is hidden (user has used the feature enough) */
+  hideIdleHint?: boolean;
 }
 
 // ============================================================================
@@ -100,7 +108,7 @@ export function renderFindTargetOverlay(
 
   switch (data.state) {
     case FindTargetOverlayState.Idle:
-      renderIdleState(ctx);
+      renderIdleState(ctx, data.hideIdleHint);
       break;
     case FindTargetOverlayState.NoApiKey:
       renderNoApiKeyState(ctx);
@@ -123,6 +131,13 @@ export function renderFindTargetOverlay(
     case FindTargetOverlayState.Error:
       renderErrorState(ctx, data.errorMessage);
       break;
+    case FindTargetOverlayState.SelectFromList:
+      renderSelectFromListState(
+        ctx,
+        data.candidateNames || [],
+        data.selectedCandidateIndex ?? 0,
+      );
+      break;
   }
 
   ctx.restore();
@@ -132,7 +147,9 @@ export function renderFindTargetOverlay(
 // State renderers
 // ============================================================================
 
-function renderIdleState(ctx: CanvasRenderingContext2D): void {
+function renderIdleState(ctx: CanvasRenderingContext2D, hideHint?: boolean): void {
+  if (hideHint) return; // User has used the feature enough — skip the hint
+
   ctx.font = FONT_HINT;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -283,6 +300,120 @@ function renderErrorState(ctx: CanvasRenderingContext2D, errorMsg: string | null
     'Click to retry',
     OVERLAY_X + OVERLAY_WIDTH / 2,
     OVERLAY_Y + OVERLAY_HEIGHT - PAD_Y - 4,
+  );
+}
+
+// ============================================================================
+// Select-from-list renderer (uses FULL screen, not just bottom overlay)
+// ============================================================================
+
+const LIST_FONT = 'bold 13px sans-serif';
+const LIST_HINT_FONT = '10px sans-serif';
+const LIST_LINE_HEIGHT = 22;
+const LIST_PAD = 8;
+const LIST_HIGHLIGHT_COLOR = 'rgba(100, 255, 100, 0.95)';
+const LIST_NORMAL_COLOR = 'rgba(255, 255, 255, 0.6)';
+const LIST_BG = 'rgba(0, 0, 0, 0.92)';
+const LIST_HIGHLIGHT_BG = 'rgba(100, 255, 100, 0.15)';
+
+/**
+ * Render a centered selection list covering most of the screen.
+ * The list is drawn on top of everything else.
+ */
+function renderSelectFromListState(
+  ctx: CanvasRenderingContext2D,
+  names: string[],
+  selectedIndex: number,
+): void {
+  if (names.length === 0) return;
+
+  // Determine list panel geometry — centered on the full canvas
+  const maxVisibleItems = Math.min(names.length, 10);
+  const listContentHeight = maxVisibleItems * LIST_LINE_HEIGHT;
+  const headerHeight = 20; // "Select an object" title
+  const footerHeight = 16; // scroll/confirm hint
+  const panelHeight = headerHeight + listContentHeight + footerHeight + LIST_PAD * 3;
+  const panelWidth = Math.min(CANVAS_WIDTH - 20, 440);
+  const panelX = Math.floor((CANVAS_WIDTH - panelWidth) / 2);
+  const panelY = Math.floor((CANVAS_HEIGHT - panelHeight) / 2);
+
+  // Background
+  ctx.fillStyle = LIST_BG;
+  ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
+
+  // Border
+  ctx.strokeStyle = COLOR_BORDER;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
+
+  // Header
+  ctx.font = 'bold 11px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = COLOR_HINT;
+  ctx.fillText('Select an object', panelX + panelWidth / 2, panelY + LIST_PAD);
+
+  // List items — scroll window so the selected item is always visible
+  const listStartY = panelY + LIST_PAD + headerHeight;
+  const maxVisible = Math.floor(
+    (panelHeight - headerHeight - footerHeight - LIST_PAD * 3) / LIST_LINE_HEIGHT,
+  );
+
+  // Determine scroll offset so selectedIndex stays visible
+  let scrollOffset = 0;
+  if (names.length > maxVisible) {
+    // Keep selected item roughly centered, clamped to bounds
+    scrollOffset = Math.max(
+      0,
+      Math.min(selectedIndex - Math.floor(maxVisible / 2), names.length - maxVisible),
+    );
+  }
+
+  ctx.textAlign = 'left';
+  for (let i = 0; i < maxVisible && scrollOffset + i < names.length; i++) {
+    const itemIndex = scrollOffset + i;
+    const y = listStartY + i * LIST_LINE_HEIGHT;
+
+    if (itemIndex === selectedIndex) {
+      // Highlight bar
+      ctx.fillStyle = LIST_HIGHLIGHT_BG;
+      ctx.fillRect(panelX + 4, y - 1, panelWidth - 8, LIST_LINE_HEIGHT);
+      ctx.fillStyle = LIST_HIGHLIGHT_COLOR;
+      ctx.font = LIST_FONT;
+      ctx.fillText(`▸ ${names[itemIndex]}`, panelX + LIST_PAD + 4, y + 4);
+    } else {
+      ctx.fillStyle = LIST_NORMAL_COLOR;
+      ctx.font = '12px sans-serif';
+      ctx.fillText(`  ${names[itemIndex]}`, panelX + LIST_PAD + 4, y + 4);
+    }
+  }
+
+  // Scroll indicators
+  if (scrollOffset > 0) {
+    ctx.fillStyle = COLOR_HINT;
+    ctx.textAlign = 'right';
+    ctx.font = '10px sans-serif';
+    ctx.fillText('▲', panelX + panelWidth - LIST_PAD, listStartY + 4);
+  }
+  if (scrollOffset + maxVisible < names.length) {
+    ctx.fillStyle = COLOR_HINT;
+    ctx.textAlign = 'right';
+    ctx.font = '10px sans-serif';
+    ctx.fillText(
+      '▼',
+      panelX + panelWidth - LIST_PAD,
+      listStartY + (maxVisible - 1) * LIST_LINE_HEIGHT + 4,
+    );
+  }
+
+  // Footer hint
+  ctx.font = LIST_HINT_FONT;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = COLOR_HINT;
+  ctx.fillText(
+    'Scroll to browse · Click to confirm · 2×Click to cancel',
+    panelX + panelWidth / 2,
+    panelY + panelHeight - LIST_PAD - 2,
   );
 }
 

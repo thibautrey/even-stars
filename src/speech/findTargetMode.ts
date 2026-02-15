@@ -13,6 +13,11 @@ import {
   type SpeechToTextCallbacks,
 } from './index';
 import {
+  getFindTargetUsageCount,
+  incrementFindTargetUsage,
+  FIND_TARGET_HINT_THRESHOLD,
+} from './apiKeyStorage';
+import {
   FindTargetOverlayState,
   type FindTargetOverlayData,
 } from './findTargetOverlay';
@@ -31,6 +36,10 @@ export interface FindTargetModeState {
   isActive: boolean;
   /** The matched search object (before converting to FocusTarget) */
   matchedObject: SearchableObject | null;
+  /** List of candidate objects when AI returned multiple results */
+  candidateList: SearchableObject[];
+  /** Currently highlighted candidate index */
+  selectedCandidateIndex: number;
 }
 
 // ============================================================================
@@ -51,6 +60,8 @@ function createInitialModeState(): FindTargetModeState {
     },
     isActive: false,
     matchedObject: null,
+    candidateList: [],
+    selectedCandidateIndex: 0,
   };
 }
 
@@ -70,6 +81,9 @@ export async function activateFindTargetMode(
   modeState.isActive = true;
   onTargetFound = targetFoundCallback;
   activeBridge = bridge;
+
+  // Track usage for hint-hiding logic
+  incrementFindTargetUsage();
 
   // Check if API key is available
   const hasKey = await hasApiKey(bridge);
@@ -119,6 +133,21 @@ export async function handleFindTargetClick(bridge: EvenAppBridge): Promise<void
       await startVoiceSearch(bridge);
       break;
 
+    case FindTargetOverlayState.SelectFromList: {
+      // Confirm the currently highlighted candidate
+      const selected = modeState.candidateList[modeState.selectedCandidateIndex];
+      if (selected) {
+        modeState.matchedObject = selected;
+        modeState.overlay.state = FindTargetOverlayState.Matched;
+        modeState.overlay.matchedName = selected.name;
+        modeState.candidateList = [];
+        modeState.selectedCandidateIndex = 0;
+        const target = searchObjectToFocusTarget(selected);
+        onTargetFound?.(target);
+      }
+      break;
+    }
+
     case FindTargetOverlayState.Listening:
       // Stop listening and process the result
       await finishListening();
@@ -149,6 +178,8 @@ export async function handleFindTargetDoubleClick(): Promise<void> {
     errorMessage: null,
   };
   modeState.matchedObject = null;
+  modeState.candidateList = [];
+  modeState.selectedCandidateIndex = 0;
 }
 
 /**
@@ -169,6 +200,11 @@ export function getFindTargetOverlay(): FindTargetOverlayData {
       modeState.overlay.state === FindTargetOverlayState.Processing) {
     modeState.overlay.transcription = getSpeechState().transcription;
   }
+  // Attach candidate list data when in SelectFromList state
+  if (modeState.overlay.state === FindTargetOverlayState.SelectFromList) {
+    modeState.overlay.candidateNames = modeState.candidateList.map(c => c.name);
+    modeState.overlay.selectedCandidateIndex = modeState.selectedCandidateIndex;
+  }
   return modeState.overlay;
 }
 
@@ -177,6 +213,29 @@ export function getFindTargetOverlay(): FindTargetOverlayData {
  */
 export function isFindTargetActive(): boolean {
   return modeState.isActive;
+}
+
+/**
+ * Handle scroll navigation within the candidate selection list.
+ * Returns true if the scroll was consumed (list is showing), false otherwise.
+ */
+export function handleFindTargetScroll(direction: 'next' | 'prev'): boolean {
+  if (!modeState.isActive) return false;
+  if (modeState.overlay.state !== FindTargetOverlayState.SelectFromList) return false;
+  if (modeState.candidateList.length === 0) return false;
+
+  if (direction === 'next') {
+    modeState.selectedCandidateIndex = Math.min(
+      modeState.selectedCandidateIndex + 1,
+      modeState.candidateList.length - 1,
+    );
+  } else {
+    modeState.selectedCandidateIndex = Math.max(
+      modeState.selectedCandidateIndex - 1,
+      0,
+    );
+  }
+  return true;
 }
 
 /**
@@ -294,7 +353,13 @@ async function matchAndNotify(text: string): Promise<void> {
   // Guard: mode may have been deactivated while the request was in flight
   if (!modeState.isActive) return;
 
-  if (result.success && result.object) {
+  if (result.success && result.candidates && result.candidates.length > 1) {
+    // Multiple candidates — show selection list
+    modeState.candidateList = result.candidates;
+    modeState.selectedCandidateIndex = 0;
+    modeState.overlay.state = FindTargetOverlayState.SelectFromList;
+    modeState.overlay.transcription = text;
+  } else if (result.success && result.object) {
     modeState.matchedObject = result.object;
     modeState.overlay.state = FindTargetOverlayState.Matched;
     modeState.overlay.matchedName = result.object.name;

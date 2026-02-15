@@ -66,6 +66,7 @@ import {
   deactivateFindTargetMode,
   handleFindTargetClick,
   handleFindTargetDoubleClick,
+  handleFindTargetScroll,
   handleAudioData,
   getFindTargetOverlay,
   isFindTargetActive,
@@ -741,6 +742,15 @@ function handleRingDoubleClick(): void {
  * Handle menu navigation (next/prev)
  */
 function handleMenuNavigation(direction: 'next' | 'prev'): void {
+  // If Find Target mode has a candidate list showing, scroll within it
+  if (appState.appMode === AppMode.TargetFinder && isFindTargetActive()) {
+    const consumed = handleFindTargetScroll(direction);
+    if (consumed) {
+      render();
+      return;
+    }
+  }
+
   // If time menu is open, navigate within it instead of the main menu
   if (appState.appMode === AppMode.Time && isTimeMenuOpen()) {
     if (direction === 'next') {
