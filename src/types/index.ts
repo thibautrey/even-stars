@@ -243,14 +243,14 @@ export interface DeviceStatus {
 
 /**
  * Application modes for the astronomical compass
- * - Identify: Auto-detect what's being looked at
  * - TargetFinder: Guide to selected target
  * - ConstellationHints: Show constellation outlines only
+ * - Time: Time-based astronomy features
  */
 export enum AppMode {
-  Identify = 'identify',
   TargetFinder = 'finder',
   ConstellationHints = 'hints',
+  Time = 'time',
 }
 
 /**

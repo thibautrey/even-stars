@@ -384,8 +384,9 @@ export function updateIdentifyMode(
   appState: CompassState,
   forceUpdate: boolean = false
 ): boolean {
-  // Only update when in Identify mode
-  if (appState.appMode !== AppMode.Identify) {
+  // Note: Identify mode has been replaced with Time mode
+  // This function is kept for backward compatibility but won't be active
+  if (appState.appMode !== AppMode.TargetFinder) {
     return false;
   }
 

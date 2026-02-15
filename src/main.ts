@@ -53,16 +53,12 @@ import {
   formatOrientation,
 } from './sensors/gyroscope';
 
-import {
-  updateIdentifyMode,
-} from './identify';
-
 // Application state - Simplified for Astronomical Compass
 const appState: CompassState = {
   isConnected: false,
   location: null,
   orientation: { ...DEFAULT_ORIENTATION },
-  appMode: AppMode.Identify,
+  appMode: AppMode.TargetFinder,
   identifiedObject: null,
   focusTarget: null,
   menuItems: getMenuItemNames(),
@@ -585,14 +581,8 @@ let currentInfoContent: InfoPanelContent | null = null;
 function render(): void {
   if (!skyCtx || !appState.location) return;
 
-  // Update Identify mode logic when in Identify mode
-  if (appState.appMode === AppMode.Identify) {
-    // Update the state machine for identify mode
-    const stateChanged = updateIdentifyMode(appState);
-    if (stateChanged) {
-      updateBrowserDisplay();
-    }
-  }
+  // TODO: Add Time mode logic here when needed
+  // Identify mode has been removed and replaced with Time mode
 
   // Update info panel content
   currentInfoContent = updateInfoPanel(appState);
@@ -611,7 +601,6 @@ function render(): void {
     planetFilter: 'all' as any,
     deepSkyFilter: 'all' as any,
     finderTarget: appState.focusTarget as any,
-    identifyMode: appState.appMode === AppMode.Identify,
   });
 
   // Render horizontal menu at the bottom

@@ -111,43 +111,63 @@ export const PLANETS: Planet[] = [
 ];
 
 /**
- * Calculate planet's heliocentric position (simplified)
- * Returns ecliptic longitude and latitude in degrees
+ * Calculate planet's heliocentric position using full 3D orbital geometry.
+ * Returns ecliptic longitude and latitude in degrees, and heliocentric distance.
  */
 function calculatePlanetPosition(
   planet: Planet, 
   date: Date = new Date()
 ): { longitude: number; latitude: number; distance: number } {
   const jd = getJulianDate(date);
-  // Note: Julian centuries from J2000 (T) would be calculated as (jd - 2451545.0) / 36525
-  // for more precise calculations, but we use a simplified model here
-  
-  // Mean anomaly
-  const n = 360 / (planet.period * 365.25); // Mean daily motion
-  const M = normalizeDegrees(planet.meanLongitude + n * (jd - 2451545.0) - planet.argPerihelion);
+
+  // Mean daily motion (degrees per day)
+  const n = 360 / (planet.period * 365.25);
+
+  // Current mean longitude
+  const currentMeanLong = planet.meanLongitude + n * (jd - 2451545.0);
+
+  // Longitude of perihelion: ω̃ = ω + Ω
+  const longPerihelion = planet.argPerihelion + planet.longitudeNode;
+
+  // Mean anomaly: M = L − ω̃
+  const M = normalizeDegrees(currentMeanLong - longPerihelion);
   const MRad = toRadians(M);
-  
-  // Eccentric anomaly (simplified - using first approximation)
-  const E = M + toDegrees(planet.eccentricity * Math.sin(MRad));
+
+  // Solve Kepler's equation  M = E − e·sin(E)  via Newton-Raphson
+  let E = M + toDegrees(planet.eccentricity * Math.sin(MRad)); // first-order seed
+  for (let i = 0; i < 6; i++) {
+    const ERad_i = toRadians(E);
+    const dE = (E - toDegrees(planet.eccentricity * Math.sin(ERad_i)) - M) /
+               (1 - planet.eccentricity * Math.cos(ERad_i));
+    E -= dE;
+    if (Math.abs(dE) < 1e-8) break;
+  }
   const ERad = toRadians(E);
-  
+
   // True anomaly
   const nu = 2 * toDegrees(Math.atan2(
     Math.sqrt(1 + planet.eccentricity) * Math.sin(ERad / 2),
     Math.sqrt(1 - planet.eccentricity) * Math.cos(ERad / 2)
   ));
-  
-  // Distance from Sun
+
+  // Heliocentric distance
   const r = planet.semiMajorAxis * (1 - planet.eccentricity * Math.cos(ERad));
-  
-  // Heliocentric ecliptic coordinates
-  const L = normalizeDegrees(nu + planet.argPerihelion);
-  
-  // Simplified - assume planets are near ecliptic plane
-  // For more accuracy, would need full 3D coordinate transformation
-  const longitude = L;
-  const latitude = 0; // Simplified
-  
+
+  // Full 3D heliocentric ecliptic coordinates
+  // Argument of latitude: u = ν + ω  (angle in the orbital plane from the ascending node)
+  const uRad = toRadians(nu + planet.argPerihelion);
+  const OmegaRad = toRadians(planet.longitudeNode);
+  const iRad = toRadians(planet.inclination);
+
+  const xEcl = r * (Math.cos(OmegaRad) * Math.cos(uRad) -
+                    Math.sin(OmegaRad) * Math.sin(uRad) * Math.cos(iRad));
+  const yEcl = r * (Math.sin(OmegaRad) * Math.cos(uRad) +
+                    Math.cos(OmegaRad) * Math.sin(uRad) * Math.cos(iRad));
+  const zEcl = r * Math.sin(uRad) * Math.sin(iRad);
+
+  const longitude = normalizeDegrees(toDegrees(Math.atan2(yEcl, xEcl)));
+  const latitude  = toDegrees(Math.atan2(zEcl, Math.sqrt(xEcl * xEcl + yEcl * yEcl)));
+
   return { longitude, latitude, distance: r };
 }
 
@@ -163,41 +183,51 @@ function calculateEarthPosition(date: Date = new Date()): { longitude: number; d
 }
 
 /**
- * Convert heliocentric ecliptic to geocentric equatorial coordinates
+ * Convert heliocentric ecliptic to geocentric equatorial coordinates.
+ * Uses full 3D geometry (ecliptic latitude is taken into account).
  */
 function toEquatorial(
   planetLongitude: number,
+  planetLatitude: number,
   planetDistance: number,
   earthLongitude: number
 ): { ra: number; dec: number } {
-  // Simplified calculation - assumes circular orbits in ecliptic plane
-  // For production, use VSOP87 or similar high-precision theory
-  
-  // Convert to radians
+  // Planet heliocentric ecliptic → rectangular
   const Lp = toRadians(planetLongitude);
+  const Bp = toRadians(planetLatitude);
+  const rp = planetDistance;
+  const xp = rp * Math.cos(Bp) * Math.cos(Lp);
+  const yp = rp * Math.cos(Bp) * Math.sin(Lp);
+  const zp = rp * Math.sin(Bp);
+
+  // Earth heliocentric (simplified circular orbit in ecliptic plane)
   const Le = toRadians(earthLongitude);
-  
-  // Geocentric ecliptic longitude (simplified)
-  const x = planetDistance * Math.cos(Lp) - Math.cos(Le);
-  const y = planetDistance * Math.sin(Lp) - Math.sin(Le);
-  
-  const geocentricLon = toDegrees(Math.atan2(y, x));
-  const geocentricLat = 0; // Simplified - planets stay near ecliptic
-  
-  // Convert ecliptic to equatorial (simplified - neglecting obliquity variation)
-  const epsilon = toRadians(23.4397); // Obliquity of ecliptic
+  const xe = Math.cos(Le);
+  const ye = Math.sin(Le);
+
+  // Geocentric ecliptic rectangular
+  const xg = xp - xe;
+  const yg = yp - ye;
+  const zg = zp; // Earth is in ecliptic plane, so ze = 0
+
+  // Geocentric ecliptic spherical
+  const geocentricLon = toDegrees(Math.atan2(yg, xg));
+  const geocentricLat = toDegrees(Math.atan2(zg, Math.sqrt(xg * xg + yg * yg)));
+
+  // Convert ecliptic to equatorial
+  const epsilon = toRadians(23.4393); // Mean obliquity of ecliptic (J2000)
   const lonRad = toRadians(geocentricLon);
   const latRad = toRadians(geocentricLat);
-  
+
   const ra = toDegrees(Math.atan2(
     Math.sin(lonRad) * Math.cos(epsilon) - Math.tan(latRad) * Math.sin(epsilon),
     Math.cos(lonRad)
   ));
-  
+
   const dec = toDegrees(Math.asin(
     Math.sin(latRad) * Math.cos(epsilon) + Math.cos(latRad) * Math.sin(epsilon) * Math.sin(lonRad)
   ));
-  
+
   return { ra: normalizeDegrees(ra) / 15, dec }; // Convert RA to hours
 }
 
@@ -219,7 +249,7 @@ export function getPlanetHorizontalCoords(
     // But still calculate position
   }
   
-  const equatorial = toEquatorial(planetPos.longitude, planetPos.distance, earthPos.longitude);
+  const equatorial = toEquatorial(planetPos.longitude, planetPos.latitude, planetPos.distance, earthPos.longitude);
   
   const jd = getJulianDate(date);
   const gmst = getGMST(jd);
@@ -290,11 +320,14 @@ export function getPlanetMagnitude(planet: Planet, date: Date = new Date()): num
   const pos = calculatePlanetPosition(planet, date);
   const earthPos = calculateEarthPosition(date);
   
-  // Distance from Earth
-  const delta = Math.sqrt(
-    pos.distance * pos.distance + earthPos.distance * earthPos.distance - 
-    2 * pos.distance * earthPos.distance * Math.cos(toRadians(pos.longitude - earthPos.longitude))
-  );
+  // Distance from Earth (3D)
+  const Lp = toRadians(pos.longitude);
+  const Bp = toRadians(pos.latitude);
+  const Le = toRadians(earthPos.longitude);
+  const dx = pos.distance * Math.cos(Bp) * Math.cos(Lp) - earthPos.distance * Math.cos(Le);
+  const dy = pos.distance * Math.cos(Bp) * Math.sin(Lp) - earthPos.distance * Math.sin(Le);
+  const dz = pos.distance * Math.sin(Bp);
+  const delta = Math.sqrt(dx * dx + dy * dy + dz * dz);
   
   // Very simplified magnitude calculation
   return planet.baseMagnitude + 5 * Math.log10(delta);

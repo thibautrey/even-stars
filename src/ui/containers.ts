@@ -85,7 +85,7 @@ export function createInfoTextContainer(): TextContainerProperty {
  * The list is positioned behind the image container, so it's visually hidden,
  * but it still captures ring input events via isEventCapture=1.
  *
- * @param menuItemNames - The actual menu item labels (e.g. ['Identify', 'Find Target', 'Explain'])
+ * @param menuItemNames - The actual menu item labels (e.g. ['Find Target', 'Explain', 'Time'])
  */
 export function createMenuEventContainer(menuItemNames: string[]): ListContainerProperty {
   const items = menuItemNames.length > 0 ? menuItemNames : ['Default'];
@@ -140,7 +140,7 @@ export function createMenuEventContainer(menuItemNames: string[]): ListContainer
  * Sky view includes the menu rendered on top
  * Plus an invisible list container for capturing scroll events
  */
-export function createSimplifiedStartupConfig(menuItemNames: string[] = ['Identify', 'Find Target', 'Explain']): CreateStartUpPageContainer {
+export function createSimplifiedStartupConfig(menuItemNames: string[] = ['Find Target', 'Explain', 'Time']): CreateStartUpPageContainer {
   const config: CreateStartUpPageContainer = {
     containerTotalNum: 3, // Sky view + text info + event capture container
     imageObject: [createSkyViewContainer()],
@@ -161,7 +161,7 @@ export function createSimplifiedStartupConfig(menuItemNames: string[] = ['Identi
 /**
  * Create page rebuild config
  */
-export function createSimplifiedRebuildConfig(menuItemNames: string[] = ['Identify', 'Find Target', 'Explain']): CreateStartUpPageContainer {
+export function createSimplifiedRebuildConfig(menuItemNames: string[] = ['Find Target', 'Explain', 'Time']): CreateStartUpPageContainer {
   return createSimplifiedStartupConfig(menuItemNames);
 }
 

@@ -282,8 +282,7 @@ export interface SkyRenderOptions {
   deepSkyFilter?: DeepSkyFilter;
   /** Target object for the finder/locator feature */
   finderTarget?: SearchableObject | null;
-  /** Whether to render identify overlay (labels at object positions) */
-  identifyMode?: boolean;
+
 }
 
 export function renderSky(options: SkyRenderOptions): {
@@ -526,7 +525,6 @@ export function renderSkyToBuffer(options: SkyRenderOptions): {
     planetFilter = PlanetFilter.All,
     deepSkyFilter = DeepSkyFilter.All,
     finderTarget = null,
-    identifyMode = false,
   } = options;
   
   // Clear canvas with BLACK background
@@ -620,13 +618,8 @@ export function renderSkyToBuffer(options: SkyRenderOptions): {
     }
   }
   
-  // Render star name labels (with collision avoidance)
-  // In identify mode, use the enhanced identify overlay instead
-  if (identifyMode) {
-    renderIdentifyOverlay(ctx, location, orientation, fov, date);
-  } else {
-    renderStarLabels(ctx, location, orientation, fov, date);
-  }
+  // Render object labels with pill overlay (AR-style identification)
+  renderIdentifyOverlay(ctx, location, orientation, fov, date);
   
   // Render cardinal markers
   renderCardinalMarkers(ctx, orientation, fov);
@@ -660,101 +653,6 @@ function rectOverlaps(
     }
   }
   return false;
-}
-
-/**
- * Render star name labels with collision avoidance
- */
-function renderStarLabels(
-  ctx: CanvasRenderingContext2D,
-  location: GeoLocation,
-  orientation: HeadOrientation,
-  fov: FieldOfView,
-  date: Date
-): void {
-  const labelCandidates: Array<{
-    star: Star;
-    x: number;
-    y: number;
-    priority: number;
-  }> = [];
-  
-  for (const star of BRIGHT_STARS) {
-    if (!star.name || star.magnitude > 3.0) continue;
-    
-    const coords = getStarHorizontalCoords(star, location, date);
-    if (!isAboveHorizon(coords.altitude, -5)) continue;
-    
-    const pos = projectObject(coords, orientation, fov);
-    if (!pos) continue;
-    
-    labelCandidates.push({
-      star,
-      x: pos.x,
-      y: pos.y,
-      priority: 10 - star.magnitude,
-    });
-  }
-  
-  // Sort by priority (brightest first)
-  labelCandidates.sort((a, b) => b.priority - a.priority);
-  
-  // Place labels with collision detection
-  const placedLabels: Array<{ x: number; y: number; width: number; height: number }> = [];
-  const MAX_LABELS = 8; // Tighter for narrow 25° FOV
-  
-  ctx.font = '9px sans-serif';
-  ctx.textBaseline = 'middle';
-  
-  let placedCount = 0;
-  
-  for (const candidate of labelCandidates) {
-    if (placedCount >= MAX_LABELS) break;
-    
-    const name = candidate.star.name;
-    const metrics = ctx.measureText(name);
-    const textWidth = metrics.width;
-    const textHeight = 9; // Approximate height for 9px font
-    
-    // Try positions: right, left, above, below the star
-    const starRadius = getStarSize(candidate.star.magnitude);
-    const margin = 4;
-    
-    const positions = [
-      { x: candidate.x + starRadius + margin, y: candidate.y, align: 'left' as const },      // Right
-      { x: candidate.x - starRadius - margin - textWidth, y: candidate.y, align: 'left' as const }, // Left
-      { x: candidate.x - textWidth / 2, y: candidate.y - starRadius - margin - textHeight / 2, align: 'left' as const }, // Above
-      { x: candidate.x - textWidth / 2, y: candidate.y + starRadius + margin + textHeight / 2, align: 'left' as const }, // Below
-    ];
-    
-    for (const pos of positions) {
-      // Keep within canvas bounds
-      if (pos.x < 2 || pos.x + textWidth > CANVAS_WIDTH - 2) continue;
-      if (pos.y - textHeight / 2 < 2 || pos.y + textHeight / 2 > CANVAS_HEIGHT - 2) continue;
-      
-      // Check collision with existing labels
-      if (!rectOverlaps(pos.x, pos.y - textHeight / 2, textWidth, textHeight, placedLabels)) {
-        // Draw label with black background for readability
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(pos.x - 1, pos.y - textHeight / 2 - 1, textWidth + 2, textHeight + 2);
-        
-        // Draw text in white
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.textAlign = pos.align;
-        ctx.fillText(name, pos.x, pos.y);
-        
-        placedLabels.push({
-          x: pos.x,
-          y: pos.y - textHeight / 2,
-          width: textWidth,
-          height: textHeight,
-        });
-        
-        placedCount++;
-        break;
-      }
-    }
-  }
 }
 
 // ============================================================================

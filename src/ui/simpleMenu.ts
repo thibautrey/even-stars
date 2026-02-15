@@ -20,11 +20,6 @@ export interface SimpleMenuItem {
  */
 export const SIMPLE_MENU_ITEMS: SimpleMenuItem[] = [
   {
-    name: 'Identify',
-    appMode: AppMode.Identify,
-    description: 'Auto-detect what\'s in view',
-  },
-  {
     name: 'Find Target',
     appMode: AppMode.TargetFinder,
     description: 'Guide to selected object',
@@ -33,6 +28,11 @@ export const SIMPLE_MENU_ITEMS: SimpleMenuItem[] = [
     name: 'Explain',
     appMode: AppMode.ConstellationHints,
     description: 'Explain celestial objects',
+  },
+  {
+    name: 'Time',
+    appMode: AppMode.Time,
+    description: 'Time-based astronomy',
   },
 ];
 

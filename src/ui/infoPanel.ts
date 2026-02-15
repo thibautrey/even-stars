@@ -1,10 +1,8 @@
 // Text Info Panel for Even Stars
 // Displays identified object information as text overlay
 
-import type { IdentifiedObject, CompassState } from '../types';
+import type { CompassState } from '../types';
 import { AppMode } from '../types';
-import { formatIdentificationText } from '../identify/detector';
-import { IdentifyState, getIdentifyManager } from '../identify/identifyMode';
 
 /**
  * Layout configuration for the info panel
@@ -131,8 +129,6 @@ export const DEFAULT_INFO_PANEL_CONFIG: InfoPanelConfig = {
 export class InfoPanelManager {
   private config: InfoPanelConfig;
   private currentState: InfoPanelState = InfoPanelState.Idle;
-  private lastContent: InfoPanelContent | null = null;
-  private identifiedAt: number = 0;
 
   constructor(config: Partial<InfoPanelConfig> = {}) {
     this.config = {
@@ -172,60 +168,15 @@ export class InfoPanelManager {
     const now = Date.now();
 
     switch (appState.appMode) {
-      case AppMode.Identify:
-        return this.updateForIdentifyMode(now);
-      
       case AppMode.TargetFinder:
         return this.updateForTargetFinderMode(appState, now);
       
       case AppMode.ConstellationHints:
         return this.updateForConstellationMode(appState, now);
       
-      default:
-        return this.getIdleContent();
-    }
-  }
-
-  /**
-   * Update for Identify mode
-   */
-  private updateForIdentifyMode(now: number): InfoPanelContent | null {
-    const identifyManager = getIdentifyManager();
-    const identifyState = identifyManager.getState();
-    const identifiedObject = identifyManager.getIdentifiedObject();
-
-    switch (identifyState) {
-      case IdentifyState.Idle:
-        this.currentState = InfoPanelState.Idle;
-        return this.config.showWhenIdle ? this.getIdleContent() : null;
-
-      case IdentifyState.Scanning:
-        this.currentState = InfoPanelState.Scanning;
-        return this.getScanningContent();
-
-      case IdentifyState.Identified:
-        if (identifiedObject) {
-          this.currentState = InfoPanelState.Identified;
-          this.identifiedAt = now;
-          const content = this.objectToContent(identifiedObject);
-          this.lastContent = content;
-          return content;
-        }
-        return this.getScanningContent();
-
-      case IdentifyState.Lost:
-        // Show the last identified object briefly, then clear
-        if (now - this.identifiedAt < this.config.lostDisplayDurationMs && this.lastContent) {
-          this.currentState = InfoPanelState.Lost;
-          return {
-            ...this.lastContent,
-            tertiary: '...',
-          };
-        }
-        this.currentState = InfoPanelState.Idle;
-        this.lastContent = null;
-        return this.config.showWhenIdle ? this.getIdleContent() : null;
-
+      case AppMode.Time:
+        return this.updateForTimeMode(appState, now);
+      
       default:
         return this.getIdleContent();
     }
@@ -292,37 +243,32 @@ export class InfoPanelManager {
   }
 
   /**
-   * Convert an identified object to panel content
+   * Update for Time mode
    */
-  private objectToContent(object: IdentifiedObject): InfoPanelContent {
-    const formatted = formatIdentificationText(object, true);
+  private updateForTimeMode(
+    appState: CompassState,
+    _now: number
+  ): InfoPanelContent | null {
+    // Show current time and astronomical information
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: false 
+    });
     
-    // Parse the secondary text to extract magnitude and info
-    const secondary = formatted.secondary || '';
-    const parts = secondary.split(' · ');
-    
-    // First part is usually magnitude, rest is info
-    let secondaryText = '';
-    let tertiaryText = '';
-    
-    if (parts.length >= 1) {
-      secondaryText = parts[0];
+    // Add location info if available
+    let secondary = 'Time-based astronomy';
+    if (appState.location) {
+      const lat = appState.location.latitude.toFixed(1);
+      const lon = appState.location.longitude.toFixed(1);
+      secondary = `${lat}°, ${lon}°`;
     }
-    if (parts.length >= 2) {
-      // Check if last part looks like direction info (contains °)
-      const lastPart = parts[parts.length - 1];
-      if (lastPart.includes('°')) {
-        tertiaryText = lastPart;
-        secondaryText = parts.slice(0, -1).join(' · ');
-      } else {
-        secondaryText = parts.slice(0, 2).join(' · ');
-      }
-    }
-
+    
     return {
-      primary: formatted.primary,
-      secondary: secondaryText,
-      tertiary: tertiaryText,
+      primary: timeStr,
+      secondary: secondary,
+      tertiary: now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
     };
   }
 
@@ -333,16 +279,6 @@ export class InfoPanelManager {
     return {
       primary: 'Point at sky',
       secondary: 'Looking for bright stars...',
-    };
-  }
-
-  /**
-   * Get scanning state content
-   */
-  private getScanningContent(): InfoPanelContent {
-    return {
-      primary: 'Scanning...',
-      secondary: 'Move slowly to scan',
     };
   }
 
