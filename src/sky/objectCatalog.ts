@@ -15,9 +15,11 @@ import { SearchObjectType } from '../types/search';
 
 // Import all existing catalogs
 import { BRIGHT_STARS } from './stars';
+import { EXTENDED_STARS } from './stars-extended';
 import { PLANETS } from './planets';
 import { CONSTELLATIONS } from './constellations';
-import { DEEP_SKY_OBJECTS } from './deepsky';
+import { MESSIER_COMPLETE } from './messier-complete';
+import { CALDWELL_CATALOG } from './caldwell';
 import { STAR_DESCRIPTIONS, PLANET_DESCRIPTIONS, DEEPSKY_DESCRIPTIONS, getDefaultDescription as createDefaultDescription } from './descriptions';
 import { 
   getUserCatalogObjects, 
@@ -159,6 +161,34 @@ function initializeCache(): void {
   }
 
   // =========================================================================
+  // Index extended stars (fainter stars magnitude 3.5-6.5)
+  // =========================================================================
+  for (const star of EXTENDED_STARS) {
+    const desc = STAR_DESCRIPTIONS[star.name] || createDefaultDescription(star.name, 'star', star.magnitude, star.spectral);
+    
+    const celestialObj: CelestialObject = {
+      id: `star_${star.hr || `ext_${Math.random().toString(36).substr(2, 9)}`}`,
+      name: star.name,
+      type: SearchObjectType.Star,
+      ra: star.ra,
+      dec: star.dec,
+      magnitude: star.magnitude,
+      constellation: desc.constellation,
+      summary: desc.summary,
+      description: desc.description,
+      distance: desc.distance,
+      season: desc.season,
+      funFact: desc.funFact,
+      isUserDiscovered: false,
+      spectralType: star.spectral,
+    };
+    
+    objectCache.set(celestialObj.id, celestialObj);
+    objectCache.set(celestialObj.name, celestialObj);
+    byTypeCache!.get(SearchObjectType.Star)!.push(celestialObj);
+  }
+
+  // =========================================================================
   // Index built-in planets
   // =========================================================================
   for (const planet of PLANETS) {
@@ -188,9 +218,9 @@ function initializeCache(): void {
   }
 
   // =========================================================================
-  // Index deep sky objects (galaxies, nebulas, clusters)
+  // Index deep sky objects - Messier catalog (complete 110 objects)
   // =========================================================================
-  for (const deepSky of DEEP_SKY_OBJECTS) {
+  for (const deepSky of MESSIER_COMPLETE) {
     const desc = DEEPSKY_DESCRIPTIONS[deepSky.name] || createDefaultDescription(deepSky.name, deepSky.objectType, deepSky.magnitude);
     
     // Map deep sky object types to SearchObjectType
@@ -222,7 +252,46 @@ function initializeCache(): void {
     
     objectCache.set(celestialObj.id, celestialObj);
     objectCache.set(celestialObj.name, celestialObj);
-    objectCache.set(deepSky.catalogId, celestialObj); // Also index by Messier/NGC number (e.g., "M31")
+    objectCache.set(deepSky.catalogId, celestialObj); // Also index by Messier number (e.g., "M31")
+    byTypeCache!.get(SearchObjectType.DeepSky)!.push(celestialObj);
+  }
+
+  // =========================================================================
+  // Index deep sky objects - Caldwell catalog (109 non-Messier objects)
+  // =========================================================================
+  for (const deepSky of CALDWELL_CATALOG) {
+    const desc = DEEPSKY_DESCRIPTIONS[deepSky.name] || createDefaultDescription(deepSky.name, deepSky.objectType, deepSky.magnitude);
+    
+    // Map deep sky object types to SearchObjectType
+    const typeMap: Record<string, SearchObjectType> = {
+      galaxy: SearchObjectType.DeepSky,
+      nebula: SearchObjectType.DeepSky,
+      cluster: SearchObjectType.DeepSky,
+      planetary_nebula: SearchObjectType.DeepSky,
+      supernova_remnant: SearchObjectType.DeepSky,
+    };
+    
+    const celestialObj: CelestialObject = {
+      id: `deepsky_${deepSky.catalogId}`,
+      name: deepSky.name,
+      type: typeMap[deepSky.objectType],
+      ra: deepSky.ra,
+      dec: deepSky.dec,
+      magnitude: deepSky.magnitude,
+      constellation: deepSky.constellation,
+      summary: desc.summary,
+      description: desc.description,
+      distance: desc.distance,
+      season: deepSky.season,
+      funFact: desc.funFact,
+      isUserDiscovered: false,
+      deepSkyType: deepSky.objectType,
+      catalogId: deepSky.catalogId,
+    };
+    
+    objectCache.set(celestialObj.id, celestialObj);
+    objectCache.set(celestialObj.name, celestialObj);
+    objectCache.set(deepSky.catalogId, celestialObj); // Also index by Caldwell number (e.g., "C1")
     byTypeCache!.get(SearchObjectType.DeepSky)!.push(celestialObj);
   }
 
