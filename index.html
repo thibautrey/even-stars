@@ -760,6 +760,48 @@
               Reset
             </button>
           </div>
+
+          <!-- OpenAI API Key -->
+          <div class="setting-item">
+            <div>
+              <div class="setting-label">OpenAI API Key</div>
+              <div id="setting-openai-key-status" class="setting-hint">Required for voice search (Find Target)</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap;">
+              <input 
+                id="setting-openai-key" 
+                type="password" 
+                placeholder="sk-..." 
+                autocomplete="off"
+                spellcheck="false"
+                style="
+                  background: var(--color-bg-secondary);
+                  border: 1px solid var(--color-border);
+                  border-radius: var(--radius-sm);
+                  color: var(--color-text-primary);
+                  font-family: monospace;
+                  font-size: var(--font-size-sm);
+                  padding: var(--space-4) var(--space-8);
+                  width: 180px;
+                  outline: none;
+                  transition: border-color var(--transition-fast);
+                "
+                onfocus="this.style.borderColor='var(--color-accent-primary)'"
+                onblur="this.style.borderColor='var(--color-border)'"
+              />
+              <button id="setting-openai-key-toggle" class="button secondary" style="padding: var(--space-4) var(--space-8); font-size: var(--font-size-xs);">
+                Show
+              </button>
+              <button id="setting-openai-key-save" class="button secondary">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                  <polyline points="17 21 17 13 7 13 7 21"/>
+                  <polyline points="7 3 7 8 15 8"/>
+                </svg>
+                Save
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -228,17 +228,17 @@ export class InfoPanelManager {
   }
 
   /**
-   * Update for Constellation Hints mode
+   * Update for Constellation Hints mode (now "Explain" mode)
+   * The actual content is overridden by the explain mode banner in main.ts.
+   * This fallback is shown before explain mode detects anything.
    */
   private updateForConstellationMode(
     _appState: CompassState,
     _now: number
   ): InfoPanelContent | null {
-    // For now, show a simple hint
-    // In the future, this could show the constellation being faced
     return {
-      primary: '◊ Constellations',
-      secondary: 'Look for patterns',
+      primary: 'Looking...',
+      secondary: 'Point at a bright star or planet',
     };
   }
 

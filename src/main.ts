@@ -47,11 +47,32 @@ import {
 } from './location/geolocation';
 
 import {
+  updateExplainMode,
+  handleExplainClick,
+  renderExplainOverlay,
+  resetExplainManager,
+  type ExplainDisplay,
+} from './explain';
+
+import {
   startOrientationTracking,
   stopOrientationTracking,
   DEFAULT_ORIENTATION,
   formatOrientation,
 } from './sensors/gyroscope';
+
+import {
+  activateFindTargetMode,
+  deactivateFindTargetMode,
+  handleFindTargetClick,
+  handleFindTargetDoubleClick,
+  handleAudioData,
+  getFindTargetOverlay,
+  isFindTargetActive,
+  renderFindTargetOverlay,
+  saveApiKey,
+  loadApiKey,
+} from './speech';
 
 // Application state - Simplified for Astronomical Compass
 const appState: CompassState = {
@@ -141,6 +162,16 @@ async function init(): Promise<void> {
   // Start orientation tracking
   await startOrientationTracking(handleOrientationChange);
 
+  // Activate Find Target mode if that's the default mode
+  if (appState.appMode === AppMode.TargetFinder && bridge) {
+    await activateFindTargetMode(bridge, (target) => {
+      appState.focusTarget = target;
+      console.log('🎯 Voice search found target:', target.name);
+      updateBrowserDisplay();
+      render();
+    });
+  }
+
   // Start render loop (renders to glasses)
   startRenderLoop();
 
@@ -207,6 +238,55 @@ function initBrowserDisplay(): void {
       appState.orientation = { ...DEFAULT_ORIENTATION };
       updateBrowserDisplay();
       render();
+    });
+  }
+
+  // --- OpenAI API Key setting ---
+  const apiKeyInput = document.getElementById('setting-openai-key') as HTMLInputElement | null;
+  const apiKeySaveBtn = document.getElementById('setting-openai-key-save');
+  const apiKeyStatus = document.getElementById('setting-openai-key-status');
+
+  // Load existing key and show masked version
+  if (apiKeyInput) {
+    loadApiKey(bridge).then((key) => {
+      if (key) {
+        apiKeyInput.value = key;
+        apiKeyInput.type = 'password';
+        if (apiKeyStatus) apiKeyStatus.textContent = 'Key configured ✓';
+      }
+    });
+  }
+
+  if (apiKeySaveBtn && apiKeyInput) {
+    apiKeySaveBtn.addEventListener('click', async () => {
+      const key = apiKeyInput.value.trim();
+      if (!key) {
+        if (apiKeyStatus) apiKeyStatus.textContent = 'Please enter a key';
+        return;
+      }
+      if (apiKeyStatus) apiKeyStatus.textContent = 'Saving...';
+      const ok = await saveApiKey(key, bridge);
+      if (ok) {
+        if (apiKeyStatus) apiKeyStatus.textContent = 'Key saved ✓';
+        apiKeyInput.type = 'password';
+        console.log('✓ OpenAI API key saved');
+      } else {
+        if (apiKeyStatus) apiKeyStatus.textContent = 'Failed to save';
+      }
+    });
+  }
+
+  // Toggle show/hide API key
+  const apiKeyToggle = document.getElementById('setting-openai-key-toggle');
+  if (apiKeyToggle && apiKeyInput) {
+    apiKeyToggle.addEventListener('click', () => {
+      if (apiKeyInput.type === 'password') {
+        apiKeyInput.type = 'text';
+        apiKeyToggle.textContent = 'Hide';
+      } else {
+        apiKeyInput.type = 'password';
+        apiKeyToggle.textContent = 'Show';
+      }
     });
   }
 
@@ -373,6 +453,14 @@ function setupEventListeners(): void {
       // Scroll events on lists are handled natively by the list widget
     }
 
+    // --- Audio events (microphone PCM data for speech-to-text) ---
+    if (event?.audioEvent) {
+      const pcm = event.audioEvent.audioPcm;
+      if (pcm && pcm.length > 0) {
+        handleAudioData(pcm instanceof Uint8Array ? pcm : new Uint8Array(pcm));
+      }
+    }
+
     // --- Foreground events (neither text nor sys channel specific) ---
     const rawEventType = getRawEventType(event);
     const normalizedType = normalizeEventType(rawEventType);
@@ -484,24 +572,51 @@ function normalizeEventType(rawEventType: unknown): OsEventTypeList | undefined 
 
 /**
  * Handle ring single-click.
- * Currently confirms the active mode. Can be extended for mode-specific actions.
+ * In Find Target mode: starts/stops voice search.
+ * In Explain mode: toggles lock on current object.
+ * In other modes: confirms the active mode selection.
  */
 function handleRingClick(): void {
+  // Find Target mode: delegate to voice search handler
+  if (appState.appMode === AppMode.TargetFinder && isFindTargetActive() && bridge) {
+    handleFindTargetClick(bridge);
+    updateBrowserDisplay();
+    render();
+    return;
+  }
+
+  // Explain mode: toggle lock on current object
+  if (appState.appMode === AppMode.ConstellationHints) {
+    const isNowLocked = handleExplainClick();
+    console.log(`🔘 Click in Explain mode: ${isNowLocked ? 'LOCKED' : 'UNLOCKED'}`);
+    updateBrowserDisplay();
+    render();
+    return;
+  }
+
   const selectedLabel = getSelectedLabel(menuState);
   console.log(`🔘 Click: confirmed mode "${selectedLabel}" (index: ${menuState.selectedIndex})`);
   // Mode is already applied when scrolling; click is a confirmation.
-  // Future: could trigger mode-specific actions (e.g. lock identify target)
   updateBrowserDisplay();
   render();
 }
 
 /**
  * Handle ring double-click.
- * Currently a no-op placeholder - could be used for exit or back navigation.
+ * In Find Target mode: cancels current voice search.
+ * In other modes: no-op placeholder.
  */
 function handleRingDoubleClick(): void {
+  // Find Target mode: cancel voice search
+  if (appState.appMode === AppMode.TargetFinder && isFindTargetActive()) {
+    handleFindTargetDoubleClick();
+    console.log('🔘🔘 Double-click: cancelled voice search');
+    updateBrowserDisplay();
+    render();
+    return;
+  }
+
   console.log('🔘🔘 Double-click: no action assigned yet');
-  // Future: exit app, toggle detail view, reset orientation, etc.
 }
 
 /**
@@ -521,8 +636,27 @@ function handleMenuNavigation(direction: 'next' | 'prev'): void {
   // Apply the selection (change mode)
   const selectedLabel = getSelectedLabel(menuState);
   if (selectedLabel) {
+    const previousMode = appState.appMode;
     const newMode = handleMenuSelect(appState, selectedLabel);
     if (newMode !== null) {
+      // Reset explain manager when leaving explain mode
+      if (previousMode === AppMode.ConstellationHints && newMode !== AppMode.ConstellationHints) {
+        resetExplainManager();
+        currentExplainDisplay = null;
+      }
+      // Deactivate find target when leaving that mode
+      if (previousMode === AppMode.TargetFinder && newMode !== AppMode.TargetFinder) {
+        deactivateFindTargetMode();
+      }
+      // Activate find target when entering that mode
+      if (newMode === AppMode.TargetFinder && previousMode !== AppMode.TargetFinder && bridge) {
+        activateFindTargetMode(bridge, (target) => {
+          appState.focusTarget = target;
+          console.log('🎯 Voice search found target:', target.name);
+          updateBrowserDisplay();
+          render();
+        });
+      }
       console.log(`✓ Menu ${direction}: switched to mode:`, newMode, `(index: ${menuState.selectedIndex})`);
       updateBrowserDisplay();
       render();
@@ -586,21 +720,36 @@ function stopRenderLoop(): void {
 // Current info panel content for display
 let currentInfoContent: InfoPanelContent | null = null;
 
+// Current explain mode display state
+let currentExplainDisplay: ExplainDisplay | null = null;
+
 /**
  * Render the sky to glasses
  */
 function render(): void {
   if (!skyCtx || !appState.location) return;
 
-  // TODO: Add Time mode logic here when needed
-  // Identify mode has been removed and replaced with Time mode
+  // Update explain mode if active
+  if (appState.appMode === AppMode.ConstellationHints) {
+    currentExplainDisplay = updateExplainMode(appState);
+  } else {
+    currentExplainDisplay = null;
+  }
 
-  // Update info panel content
+  // Update info panel content (explain mode overrides this below)
   currentInfoContent = updateInfoPanel(appState);
 
+  // Override info panel content with explain banner when active
+  if (currentExplainDisplay?.banner) {
+    const banner = currentExplainDisplay.banner;
+    currentInfoContent = {
+      primary: `${banner.symbol} ${banner.name}`,
+      secondary: banner.stats,
+      tertiary: currentExplainDisplay.isLocked ? 'LOCKED — click to unlock' : undefined,
+    };
+  }
+
   // Render sky to offscreen canvas (for glasses)
-  // In Identify mode, the renderer draws object labels directly on the canvas
-  // at their projected screen positions — AR-style overlay on the glasses display
   renderSkyToBuffer({
     ctx: skyCtx,
     location: appState.location,
@@ -613,6 +762,16 @@ function render(): void {
     deepSkyFilter: 'all' as any,
     finderTarget: appState.focusTarget as any,
   });
+
+  // Render explain mode overlay (banner + sidebar) on top of sky
+  if (currentExplainDisplay && appState.appMode === AppMode.ConstellationHints) {
+    renderExplainOverlay(skyCtx, currentExplainDisplay);
+  }
+
+  // Render find target voice overlay (bottom 1/3)
+  if (appState.appMode === AppMode.TargetFinder && isFindTargetActive()) {
+    renderFindTargetOverlay(skyCtx, getFindTargetOverlay());
+  }
 
   // Render horizontal menu at the bottom
   renderHorizontalMenu(skyCtx, menuState);
@@ -696,6 +855,9 @@ function cleanup(): void {
 
   // Stop orientation tracking
   stopOrientationTracking();
+
+  // Deactivate find target mode (stops mic if active)
+  deactivateFindTargetMode();
 
   // Unsubscribe from events
   if (deviceStatusUnsubscribe) {
