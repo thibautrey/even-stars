@@ -13,7 +13,7 @@ export {
   SINGLE_MENU_WIDTH,
   createSkyViewContainer,
   createInfoTextContainer,
-  createMenuEventContainer,
+  createEventCaptureContainer,
   createSimplifiedStartupConfig,
   createSimplifiedRebuildConfig,
   generateInfoText,

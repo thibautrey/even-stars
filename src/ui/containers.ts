@@ -3,16 +3,15 @@
 import type {
   ImageContainerProperty,
   TextContainerProperty,
-  ListContainerProperty,
   CreateStartUpPageContainer,
 } from '@evenrealities/even_hub_sdk';
 
 // Container IDs
-// Layout: Main sky view (with menu rendered on top) + Info text + Event capture container
+// Layout: Main sky view (with menu rendered on top) + Info text + Event capture text container
 export const CONTAINER_IDS = {
   SKY_VIEW: 1,      // Main view area (sky + menu rendered together)
   INFO_TEXT: 2,     // Text info container
-  MENU_EVENT: 3,    // Invisible list container for capturing scroll events
+  EVENT_CAPTURE: 3, // Text container with isEventCapture=1 for receiving scroll/click events
 } as const;
 
 // Glasses display dimensions
@@ -80,54 +79,42 @@ export function createInfoTextContainer(): TextContainerProperty {
 }
 
 /**
- * Create a list container for capturing ring events (scroll, click, double-click).
- * Uses the actual menu item names so the SDK tracks selection state.
- * The list is positioned behind the image container, so it's visually hidden,
+ * Create a text container for capturing ring events (scroll, click, double-click).
+ * Using a TextContainerProperty (instead of ListContainerProperty) ensures that
+ * scroll/swipe events arrive as textEvent with SCROLL_TOP_EVENT/SCROLL_BOTTOM_EVENT,
+ * rather than being consumed by the native list widget.
+ * 
+ * The container is positioned behind the image container, so it's visually hidden,
  * but it still captures ring input events via isEventCapture=1.
  *
- * @param menuItemNames - The actual menu item labels (e.g. ['Find Target', 'Explain', 'Time'])
+ * See SDK_DOCUMENTATION.md § "Event Handling Best Practices" for details.
  */
-export function createMenuEventContainer(menuItemNames: string[]): ListContainerProperty {
-  const items = menuItemNames.length > 0 ? menuItemNames : ['Default'];
-
-  const itemContainer = {
-    itemCount: items.length,
-    itemWidth: 0, // auto-fill
-    isItemSelectBorderEn: 0, // No visual selection (hidden behind image)
-    itemName: items,
-    toJson: () => ({
-      itemCount: items.length,
-      itemWidth: 0,
-      isItemSelectBorderEn: 0,
-      itemName: items,
-    }),
-  };
-
+export function createEventCaptureContainer(): TextContainerProperty {
   return {
-    xPosition: 8,
-    yPosition: MENU_Y_POSITION,
-    width: SINGLE_MENU_WIDTH,
-    height: MENU_HEIGHT,
+    xPosition: 0,
+    yPosition: 0,
+    width: CANVAS_WIDTH,
+    height: CANVAS_HEIGHT,
     borderWidth: 0,
     borderColor: 0,
     borderRdaius: 0,
     paddingLength: 0,
-    containerID: CONTAINER_IDS.MENU_EVENT,
-    containerName: 'menu-event',
-    itemContainer,
+    containerID: CONTAINER_IDS.EVENT_CAPTURE,
+    containerName: 'event-capture',
+    content: '',
     isEventCapture: 1,
     toJson: () => ({
-      xPosition: 8,
-      yPosition: MENU_Y_POSITION,
-      width: SINGLE_MENU_WIDTH,
-      height: MENU_HEIGHT,
+      xPosition: 0,
+      yPosition: 0,
+      width: CANVAS_WIDTH,
+      height: CANVAS_HEIGHT,
       borderWidth: 0,
       borderColor: 0,
       borderRdaius: 0,
       paddingLength: 0,
-      containerID: CONTAINER_IDS.MENU_EVENT,
-      containerName: 'menu-event',
-      itemContainer: itemContainer.toJson(),
+      containerID: CONTAINER_IDS.EVENT_CAPTURE,
+      containerName: 'event-capture',
+      content: '',
       isEventCapture: 1,
     }),
   };
@@ -138,20 +125,18 @@ export function createMenuEventContainer(menuItemNames: string[]): ListContainer
 /**
  * Create simplified startup page config
  * Sky view includes the menu rendered on top
- * Plus an invisible list container for capturing scroll events
+ * Plus an invisible text container for capturing scroll/click events
  */
-export function createSimplifiedStartupConfig(menuItemNames: string[] = ['Find Target', 'Explain', 'Time']): CreateStartUpPageContainer {
+export function createSimplifiedStartupConfig(_menuItemNames: string[] = ['Find Target', 'Explain', 'Time']): CreateStartUpPageContainer {
   const config: CreateStartUpPageContainer = {
-    containerTotalNum: 3, // Sky view + text info + event capture container
+    containerTotalNum: 3, // Sky view + info text + event capture text
     imageObject: [createSkyViewContainer()],
-    textObject: [createInfoTextContainer()],
-    listObject: [createMenuEventContainer(menuItemNames)],
+    textObject: [createInfoTextContainer(), createEventCaptureContainer()],
     toJson: function() {
       return {
         containerTotalNum: 3,
         imageObject: this.imageObject?.map(o => o.toJson()) || [],
         textObject: this.textObject?.map(o => o.toJson()) || [],
-        listObject: this.listObject?.map(o => o.toJson()) || [],
       };
     },
   };
@@ -161,8 +146,8 @@ export function createSimplifiedStartupConfig(menuItemNames: string[] = ['Find T
 /**
  * Create page rebuild config
  */
-export function createSimplifiedRebuildConfig(menuItemNames: string[] = ['Find Target', 'Explain', 'Time']): CreateStartUpPageContainer {
-  return createSimplifiedStartupConfig(menuItemNames);
+export function createSimplifiedRebuildConfig(_menuItemNames: string[] = ['Find Target', 'Explain', 'Time']): CreateStartUpPageContainer {
+  return createSimplifiedStartupConfig(_menuItemNames);
 }
 
 /**

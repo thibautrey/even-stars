@@ -355,7 +355,7 @@ function setupEventListeners(): void {
       }
     }
 
-    // --- Channel 3: listEvent (for ListContainerProperty selections) ---
+    // --- Channel 3: listEvent (kept for safety, though we no longer use ListContainerProperty) ---
     if (event?.listEvent) {
       const le = event.listEvent;
       const eventType = le.eventType;
@@ -391,13 +391,13 @@ function setupEventListeners(): void {
   // Setup keyboard controls for menu navigation
   // UP/DOWN arrows control the menu (matching glasses scroll gesture)
   window.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'ArrowUp') {
+    if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W' || e.key === 'k' || e.key === 'K') {
       e.preventDefault();
-      console.log('↑ Key pressed - previous menu item (matches ring scroll up)');
+      console.log('⬆️ Key pressed - previous menu item (matches ring scroll up / simulator W/K)');
       handleMenuNavigation('prev');
-    } else if (e.key === 'ArrowDown') {
+    } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S' || e.key === 'j' || e.key === 'J') {
       e.preventDefault();
-      console.log('↓ Key pressed - next menu item (matches ring scroll down)');
+      console.log('⬇️ Key pressed - next menu item (matches ring scroll down / simulator S/J)');
       handleMenuNavigation('next');
     } else if (e.key === 'Enter') {
       e.preventDefault();
@@ -418,8 +418,8 @@ function setupEventListeners(): void {
   });
 
   console.log('✓ Keyboard controls enabled:');
-  console.log('  ↑ (up arrow) = previous menu item (matches ring scroll up)');
-  console.log('  ↓ (down arrow) = next menu item (matches ring scroll down)');
+  console.log('  W / K / ↑ (up arrow) = previous menu item (matches ring scroll up)');
+  console.log('  S / J / ↓ (down arrow) = next menu item (matches ring scroll down)');
   console.log('  1/2/3 = select by number');
 }
 
@@ -734,7 +734,7 @@ window.addEventListener('beforeunload', cleanup);
   console.log('Menu state:', menuState);
   console.log('Container IDs:', CONTAINER_IDS);
   console.log('Ring events: SCROLL_TOP=prev, SCROLL_BOTTOM=next, CLICK=select, DOUBLE_CLICK=back');
-  console.log('Keyboard: ↑=prev, ↓=next, Enter=click, Escape=double-click, 1/2/3=select by number');
+  console.log('Keyboard: W/K/↑=prev, S/J/↓=next, Enter=click, Escape=double-click, 1/2/3=select by number');
   console.log('Console: selectMenuItem(0), handleMenuNavigation("next"), handleRingClick(), handleRingDoubleClick()');
 };
 
