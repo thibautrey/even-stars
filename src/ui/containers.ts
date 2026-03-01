@@ -1,7 +1,6 @@
 // UI Container definitions for Even glasses display
 
 import type {
-  ImageContainerProperty,
   TextContainerProperty,
   CreateStartUpPageContainer,
 } from '@evenrealities/even_hub_sdk';
@@ -9,7 +8,7 @@ import type {
 // Container IDs
 // Layout: Main sky view (with menu rendered on top) + Info text + Event capture text container
 export const CONTAINER_IDS = {
-  SKY_VIEW: 1,      // Main view area (sky + menu rendered together)
+  SKY_TEXT: 1,      // Main sky view rendered as text/unicode
   INFO_TEXT: 2,     // Text info container
   EVENT_CAPTURE: 3, // Text container with isEventCapture=1 for receiving scroll/click events
 } as const;
@@ -31,24 +30,26 @@ export const MENU_Y_POSITION = 248; // 288 - 32 - 8 (bottom margin)
 export const SINGLE_MENU_WIDTH = 560; // Full width for single menu
 
 /**
- * Create the main sky view image container
- * Full screen size (576x288), menu is rendered on top
+ * Create the main sky view text container.
+ * The sky uses a monospace-ish unicode grid to reduce image transfer overhead.
  */
-export function createSkyViewContainer(): ImageContainerProperty {
+export function createSkyTextContainer(): TextContainerProperty {
   return {
     xPosition: 0,
     yPosition: 0,
     width: CANVAS_WIDTH,
-    height: CANVAS_HEIGHT,
-    containerID: CONTAINER_IDS.SKY_VIEW,
-    containerName: 'sky-view',
+    height: 220,
+    containerID: CONTAINER_IDS.SKY_TEXT,
+    containerName: 'sky-text',
+    content: 'Initializing sky...',
     toJson: () => ({
       xPosition: 0,
       yPosition: 0,
       width: CANVAS_WIDTH,
-      height: CANVAS_HEIGHT,
-      containerID: CONTAINER_IDS.SKY_VIEW,
-      containerName: 'sky-view',
+      height: 220,
+      containerID: CONTAINER_IDS.SKY_TEXT,
+      containerName: 'sky-text',
+      content: 'Initializing sky...',
     }),
   };
 }
@@ -60,17 +61,17 @@ export function createSkyViewContainer(): ImageContainerProperty {
 export function createInfoTextContainer(): TextContainerProperty {
   return {
     xPosition: 10,
-    yPosition: 10,
+    yPosition: 224,
     width: 556, // 576 - 10 - 10
-    height: 70, // Enough for 3 lines of text
+    height: 56,
     containerID: CONTAINER_IDS.INFO_TEXT,
     containerName: 'info-text',
     content: 'Point at sky', // Initial content
     toJson: () => ({
       xPosition: 10,
-      yPosition: 10,
+      yPosition: 224,
       width: 556,
-      height: 70,
+      height: 56,
       containerID: CONTAINER_IDS.INFO_TEXT,
       containerName: 'info-text',
       content: 'Point at sky',
@@ -128,14 +129,13 @@ export function createEventCaptureContainer(): TextContainerProperty {
  * Plus an invisible text container for capturing scroll/click events
  */
 export function createSimplifiedStartupConfig(_menuItemNames: string[] = ['Find Target', 'Explain', 'Time']): CreateStartUpPageContainer {
+  const textObject = [createSkyTextContainer(), createInfoTextContainer(), createEventCaptureContainer()];
   const config: CreateStartUpPageContainer = {
-    containerTotalNum: 3, // Sky view + info text + event capture text
-    imageObject: [createSkyViewContainer()],
-    textObject: [createInfoTextContainer(), createEventCaptureContainer()],
+    containerTotalNum: 3, // Sky text + info text + event capture text
+    textObject,
     toJson: function() {
       return {
         containerTotalNum: 3,
-        imageObject: this.imageObject?.map(o => o.toJson()) || [],
         textObject: this.textObject?.map(o => o.toJson()) || [],
       };
     },

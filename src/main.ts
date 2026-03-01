@@ -14,12 +14,7 @@ import type {
   HeadOrientation,
 } from './types';
 import { AppMode } from './types';
-
-import { 
-  renderSkyToBuffer,
-  CANVAS_WIDTH, 
-  CANVAS_HEIGHT,
-} from './sky/renderer';
+import { renderUnicodeSky } from './sky/unicodeRenderer';
 
 import { 
   createSimplifiedStartupConfig,
@@ -29,8 +24,6 @@ import {
   updateInfoPanel,
   formatForSDK,
   type InfoPanelContent,
-  // Horizontal menu
-  renderHorizontalMenu,
   createMenuState,
   selectNextItem,
   selectPreviousItem,
@@ -49,7 +42,6 @@ import {
 import {
   updateExplainMode,
   handleExplainClick,
-  renderExplainOverlay,
   resetExplainManager,
   type ExplainDisplay,
 } from './explain';
@@ -71,7 +63,6 @@ import {
   getFindTargetOverlay,
   isFindTargetActive,
   processManualText,
-  renderFindTargetOverlay,
   saveApiKey,
   loadApiKey,
   fetchModels,
@@ -88,7 +79,6 @@ import {
   timeMenuSelectPrev,
   timeMenuConfirm,
   getEffectiveDate,
-  renderTimeMenuOverlay,
   getTimeMenuDisplayLabel,
   resetTimeMenu,
 } from './time';
@@ -111,10 +101,6 @@ let menuState: HorizontalMenuState = createMenuState(getMenuItemNames());
 // SDK bridge instance
 let bridge: EvenAppBridge | null = null;
 
-// Offscreen canvas for rendering sky (for glasses display)
-let skyCanvas: HTMLCanvasElement | null = null;
-let skyCtx: CanvasRenderingContext2D | null = null;
-
 // Event unsubscribers
 let deviceStatusUnsubscribe: (() => void) | null = null;
 let evenHubEventUnsubscribe: (() => void) | null = null;
@@ -136,8 +122,8 @@ function swipeThrottleOk(): boolean {
   return true;
 }
 
-// Image update queue
-let imageUpdatePending = false;
+// Track last sky text to avoid redundant updates
+let lastSkyTextContent = '';
 
 /**
  * Initialize the application
@@ -206,18 +192,7 @@ async function init(): Promise<void> {
  * Initialize the offscreen canvas for glasses rendering
  */
 function initSkyCanvas(): void {
-  // Create offscreen canvas - not attached to DOM
-  skyCanvas = document.createElement('canvas');
-  skyCanvas.width = CANVAS_WIDTH;
-  skyCanvas.height = CANVAS_HEIGHT;
-
-  skyCtx = skyCanvas.getContext('2d', { willReadFrequently: true });
-  if (!skyCtx) {
-    console.error('Could not get sky canvas context');
-    return;
-  }
-  
-  console.log(`Sky canvas initialized: ${skyCanvas.width}x${skyCanvas.height}`);
+  console.log('Unicode sky renderer enabled (no image canvas)');
 }
 
 /**
@@ -870,7 +845,7 @@ let currentExplainDisplay: ExplainDisplay | null = null;
  * Render the sky to glasses
  */
 function render(): void {
-  if (!skyCtx || !appState.location) return;
+  if (!appState.location) return;
 
   // Update explain mode if active
   if (appState.appMode === AppMode.ConstellationHints) {
@@ -892,47 +867,13 @@ function render(): void {
     };
   }
 
-  // Render sky to offscreen canvas (for glasses)
-  // Use effective date (respects time offset from Time menu)
-  renderSkyToBuffer({
-    ctx: skyCtx,
-    location: appState.location,
-    orientation: appState.orientation,
-    viewMode: 'Stars' as any, // Temporary - will be refactored in Task 3.3
-    date: getEffectiveDate(),
-    selectedStar: null,
-    starFilter: 'all' as any,
-    constellationFilter: 'all' as any,
-    planetFilter: 'all' as any,
-    deepSkyFilter: 'all' as any,
-    finderTarget: appState.focusTarget as any,
-  });
-
-  // Render explain mode overlay (banner + sidebar) on top of sky
-  if (currentExplainDisplay && appState.appMode === AppMode.ConstellationHints) {
-    renderExplainOverlay(skyCtx, currentExplainDisplay);
-  }
-
-  // Render find target voice overlay (bottom 1/3)
-  if (appState.appMode === AppMode.TargetFinder && isFindTargetActive()) {
-    renderFindTargetOverlay(skyCtx, getFindTargetOverlay());
-  }
-
-  // Render time menu overlay (right panel) when open
-  if (appState.appMode === AppMode.Time && isTimeMenuOpen()) {
-    renderTimeMenuOverlay(skyCtx);
-  }
-
   // Update the Time menu item label to reflect the active time preset
   const timeItemIndex = menuState.items.findIndex(i => i.id === 'menu-2');
   if (timeItemIndex >= 0) {
     menuState.items[timeItemIndex].label = getTimeMenuDisplayLabel();
   }
 
-  // Render horizontal menu at the bottom
-  renderHorizontalMenu(skyCtx, menuState);
-
-  // Update glasses display (image + text)
+  // Update glasses display (unicode sky + info text)
   updateGlassesDisplay();
 }
 
@@ -943,15 +884,32 @@ let lastTextContent: string = '';
  * Update the glasses display with current sky view
  */
 async function updateGlassesDisplay(): Promise<void> {
-  if (!bridge || !appState.isConnected || !skyCtx) {
+  if (!bridge || !appState.isConnected || !appState.location) {
     return;
   }
 
-  // Update text container first (lightweight)
+  // Build unicode sky snapshot (hot path: text only, no image upload).
+  const skyTextContent = renderUnicodeSky({
+    state: appState,
+    date: getEffectiveDate(),
+    menuLabels: menuState.items.map((item) => item.label),
+    selectedMenuIndex: menuState.selectedIndex,
+    finderTarget: appState.focusTarget as any,
+  });
+
   try {
+    if (skyTextContent !== lastSkyTextContent) {
+      const { TextContainerUpgrade } = await import('@evenrealities/even_hub_sdk');
+      const skyUpdate = TextContainerUpgrade.fromJson({
+        containerID: CONTAINER_IDS.SKY_TEXT,
+        content: skyTextContent,
+      });
+      await bridge.textContainerUpgrade(skyUpdate);
+      lastSkyTextContent = skyTextContent;
+    }
+
+    // Keep a compact info panel in a secondary text container.
     const textContent = formatForSDK(currentInfoContent);
-    
-    // Only send text update if content changed
     if (textContent !== lastTextContent) {
       const { TextContainerUpgrade } = await import('@evenrealities/even_hub_sdk');
       const textUpdate = TextContainerUpgrade.fromJson({
@@ -964,39 +922,6 @@ async function updateGlassesDisplay(): Promise<void> {
     }
   } catch (error) {
     console.error('Error updating text display:', error);
-  }
-
-  // Skip image update if one is pending
-  if (imageUpdatePending) {
-    return;
-  }
-
-  // Queue image update to avoid concurrent transmissions
-  imageUpdatePending = true;
-
-  try {
-    // Convert canvas to base64 PNG - the SDK/simulator expects an image format
-    if (!skyCanvas) return;
-    const dataUrl = skyCanvas.toDataURL('image/png');
-    
-    // Remove the data URL prefix to get just the base64 string
-    const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
-    
-    // Update the sky view container on glasses
-    const { ImageRawDataUpdate } = await import('@evenrealities/even_hub_sdk');
-    const imageUpdate = ImageRawDataUpdate.fromJson({
-      containerID: CONTAINER_IDS.SKY_VIEW,
-      containerName: 'sky-view',
-      imageData: base64Data,  // Send as base64 string
-    });
-    
-    // Send image to glasses
-    await bridge.updateImageRawData(imageUpdate);
-
-  } catch (error) {
-    console.error('Error updating glasses display:', error);
-  } finally {
-    imageUpdatePending = false;
   }
 }
 

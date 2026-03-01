@@ -11,7 +11,7 @@ export {
   MENU_HEIGHT,
   MENU_Y_POSITION,
   SINGLE_MENU_WIDTH,
-  createSkyViewContainer,
+  createSkyTextContainer,
   createInfoTextContainer,
   createEventCaptureContainer,
   createSimplifiedStartupConfig,
@@ -28,9 +28,8 @@ export {
   type SimpleMenuItem,
 } from './simpleMenu';
 
-// Horizontal Menu (image-based)
+// Horizontal Menu state helpers
 export {
-  renderHorizontalMenu,
   createMenuState,
   selectNextItem,
   selectPreviousItem,
